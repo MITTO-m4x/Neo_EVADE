@@ -1,6 +1,6 @@
 local NeoChat = {
     DatabaseURL = "https://neohyper-9a843-default-rtdb.europe-west1.firebasedatabase.app",
-    Version = "1.1",
+    Version = "3.1",
     StickersURL = "https://raw.githubusercontent.com/Sephtis32/Yin-stickers/refs/heads/main/YinYang_Stickers.lua",
 }
 
@@ -376,6 +376,7 @@ function NeoChat.Init(WindUI, Window, cfg)
     }, { corner(13) })
 
     local pillBtns = {}
+    local dmBadgeRefs = { badge = nil, label = nil } -- never set custom fields on WindUI instances
     local function makePill(kind, text, x)
         local b = New("TextButton", {
             Position = UDim2.new(x, 2, 0, 2), Size = UDim2.new(0.5, -4, 1, -4),
@@ -384,7 +385,7 @@ function NeoChat.Init(WindUI, Window, cfg)
             Bind = { TextColor3 = "text" }, Parent = pills,
         }, { corner(11) })
         pillBtns[kind] = b
-        -- private unread badge
+        -- private unread badge (store refs in table, not on the button)
         if kind == "private" then
             local badge = New("Frame", {
                 Name = "DMBadge",
@@ -399,8 +400,8 @@ function NeoChat.Init(WindUI, Window, cfg)
                 Text = "0", TextColor3 = Color3.new(1, 1, 1),
                 TextSize = 9, Font = Enum.Font.GothamBold, Parent = badge,
             })
-            b._dmBadge = badge
-            b._dmBadgeLbl = bl
+            dmBadgeRefs.badge = badge
+            dmBadgeRefs.label = bl
         end
         return b
     end
@@ -410,13 +411,14 @@ function NeoChat.Init(WindUI, Window, cfg)
     local function updateDMBadge()
         local n = 0
         for _, c in pairs(S.dmUnread) do n = n + c end
-        local b = pillBtns.private
-        if not b or not b._dmBadge then return end
+        local badge = dmBadgeRefs.badge
+        local label = dmBadgeRefs.label
+        if not badge or not label then return end
         if n <= 0 or S.kind == "private" then
-            b._dmBadge.Visible = false
+            badge.Visible = false
         else
-            b._dmBadge.Visible = true
-            b._dmBadgeLbl.Text = n > 9 and "9+" or tostring(n)
+            badge.Visible = true
+            label.Text = n > 9 and "9+" or tostring(n)
         end
     end
 

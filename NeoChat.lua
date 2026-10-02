@@ -1,12 +1,16 @@
 --[[
-    NeoChat v2.1  —  Firebase chat for WindUI  (Neo Hyper)
-    NO keyboard emojis in UI — WindUI icon names / clean text only.
-    Mentions-only side notifs | Private DM | Owners: v_orc, n_oqv
+    NeoChat v2.2  —  Firebase chat for WindUI  (Neo Hyper)
+    - WindUI / Lucide icons only on chrome (Footagesus Icons)
+    - Stickers from Yin catalog (GitHub) instead of emoji panel
+    - Invite cooldown 30s
+    - Clean Private player list panel
+    - Mentions-only side notifs | Owners v_orc / n_oqv
 ]]
 
 local NeoChat = {
     DatabaseURL = "https://neohyper-9a843-default-rtdb.europe-west1.firebasedatabase.app",
-    Version = "2.1",
+    Version = "2.2",
+    StickersURL = "https://raw.githubusercontent.com/Sephtis32/Yin-stickers/refs/heads/main/YinYang_Stickers.lua",
 }
 
 local cr = cloneref or function(x) return x end
@@ -20,11 +24,30 @@ local LocalPlayer      = Players.LocalPlayer
 
 local OWNERS = { ["v_orc"] = true, ["n_oqv"] = true }
 local function isOwner(name)
-    local n = tostring(name or ""):lower()
-    return OWNERS[n] == true
+    return OWNERS[tostring(name or ""):lower()] == true
 end
 local ME_IS_OWNER = isOwner(LocalPlayer.Name)
 
+------------------------------------------------------------------ Icons (WindUI / Lucide)
+local IconsLib = nil
+pcall(function()
+    IconsLib = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/Footagesus/Icons/main/Main-v2.lua"))()
+    if IconsLib and IconsLib.SetIconsType then
+        pcall(function() IconsLib.SetIconsType("lucide") end)
+    end
+end)
+
+local function getIconImage(name)
+    if not IconsLib then return nil end
+    local ok, img = pcall(function()
+        if IconsLib.GetIcon then return IconsLib.GetIcon(name) end
+        return nil
+    end)
+    if ok and type(img) == "string" and img ~= "" then return img end
+    return nil
+end
+
+------------------------------------------------------------------ HTTP
 local rawRequest = (syn and syn.request) or (http and http.request) or http_request
     or (fluxus and fluxus.request) or request
 local JSON_HEADERS = { ["Content-Type"] = "application/json" }
@@ -66,16 +89,60 @@ local function cleanName(s)
     return s
 end
 
--- Message CONTENT emoji sets only (inserted into text). UI chrome uses WindUI icons / plain text.
-local EMOJI_CONTENT = {
-    { "Faces", "😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 😉 😍 🥰 😘 😋 😜 🤪 😎 🤩 🥳 😏 😒 😞 😔 😢 😭 😤 😡 🤬 🤯 😳 🥵 🥶 😱 🤔 🤫 🙄 😴 🤤 😈 💀 👻 🤡" },
-    { "Hands", "👍 👎 👏 🙌 🙏 💪 🤝 ✌️ 🤞 🤟 🤘 👌 👋 🤙 ☝️ 👊 ✊ 🫡 🫶 ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 💔 💖 💯 🔥 ✨ ⭐ 🌟 ⚡ 💥 🎉 🎊" },
-    { "Game", "🎮 🕹️ 👾 🏆 🥇 🎯 ⚔️ 🛡️ 🏹 💣 🔫 🚀 🛸 🏎️ ✈️ 🏠 🧱 🔨 💎 👑 💰 🎁 🎲 🧩 🪄" },
-    { "Nature", "🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐸 🐵 🐧 🐦 🦄 🐝 🦋 🐢 🐍 🐙 🦈 🐬 🐳 🌹 🌸 🌈 ☀️ 🌙 ❄️" },
-    { "Food", "🍔 🍟 🍕 🌭 🍿 🍩 🍪 🎂 🍫 🍭 🍎 🍌 🍉 🍓 🥤 ☕ 🍺 🥪 🌮 🍣" },
-}
 local REACT_SET = { "❤️", "😂", "🔥", "👍", "😮", "😢" }
+local INVITE_COOLDOWN = 30
 
+------------------------------------------------------------------ Stickers catalog
+local StickerCatalog = { Order = {}, Stickers = {}, Ready = false }
+local function loadStickers(url)
+    task.spawn(function()
+        local ok, raw = pcall(function() return game:HttpGet(url or NeoChat.StickersURL, true) end)
+        if not ok or type(raw) ~= "string" then return end
+        local ok2, data = pcall(function() return loadstring(raw)() end)
+        if not ok2 or type(data) ~= "table" then return end
+        StickerCatalog.Order = data.Order or {}
+        StickerCatalog.Stickers = data.Stickers or {}
+        StickerCatalog.Ready = true
+    end)
+end
+
+local function stickerPayload(imageOrFrames)
+    if type(imageOrFrames) == "table" then
+        -- animated: list of rbxassetid + interval
+        local parts = {}
+        for _, id in ipairs(imageOrFrames) do
+            if type(id) == "string" then parts[#parts + 1] = id end
+        end
+        if #parts == 0 then return nil end
+        return "[[STICKER:" .. table.concat(parts, "|") .. "]]"
+    end
+    local img = tostring(imageOrFrames or "")
+    if img == "" then return nil end
+    return "[[STICKER:" .. img .. "]]"
+end
+
+local function parseSticker(text)
+    local body = tostring(text or ""):match("^%[%[STICKER:(.-)%]%]$")
+    if not body then return nil end
+    local frames = {}
+    local interval = 0.4
+    for part in body:gmatch("[^|]+") do
+        part = trim(part)
+        if part:match("^%d+%.%d+$") or part:match("^%d+$") then
+            local n = tonumber(part)
+            if n and n >= 0.1 and n <= 5 then interval = n end
+        elseif part:find("rbxassetid://", 1, true) or part:match("^%d+$") then
+            if not part:find("rbxassetid://", 1, true) then
+                part = "rbxassetid://" .. part
+            end
+            frames[#frames + 1] = part
+        end
+    end
+    if #frames == 0 or #frames > 3 then return nil end
+    return frames, interval
+end
+
+------------------------------------------------------------------ Settings
 local function loadSettings()
     local def = {
         SideNotifs = true,
@@ -97,11 +164,14 @@ local function loadSettings()
     return s
 end
 
+------------------------------------------------------------------ main
 function NeoChat.Init(WindUI, Window, cfg)
     cfg = cfg or {}
     cfg.DatabaseURL = cfg.DatabaseURL or NeoChat.DatabaseURL
     assert(type(cfg.DatabaseURL) == "string", "NeoChat: DatabaseURL is required")
     assert(Window, "NeoChat: Window is required")
+
+    loadStickers(cfg.StickersURL or NeoChat.StickersURL)
 
     local BASE       = (cfg.DatabaseURL:gsub("/+$", ""))
     local MAXLEN     = cfg.MaxLength or 200
@@ -118,9 +188,9 @@ function NeoChat.Init(WindUI, Window, cfg)
     local S = {
         alive = true, kind = "global", room = nil, gen = 0, lastKey = nil, loaded = false,
         seen = {}, pending = {}, unread = {}, lastSend = 0, lastToast = 0, fails = 0,
-        online = 1, emojiOpen = false, shown = 0, lastBadge = 0,
+        online = 1, panelOpen = false, shown = 0, lastBadge = 0,
         replyTo = nil, privateTarget = nil, privateName = nil,
-        typing = false, lastTypingPush = 0,
+        typing = false, lastTypingPush = 0, lastInvite = 0,
     }
 
     local function roomName(kind, targetUid)
@@ -200,42 +270,45 @@ function NeoChat.Init(WindUI, Window, cfg)
         })
     end
 
-    -- WindUI icon helper: tries Creator.Image with icon name, else plain text label (NO emoji)
-    local function makeWindIcon(parent, iconName, fallbackText, size)
-        size = size or 22
-        local holder = New("Frame", {
+    -- Clean icon button (ImageLabel from Lucide via IconsLib)
+    local function iconButton(parent, iconName, fallbackLetter, x, size, callback)
+        size = size or 30
+        local btn = New("TextButton", {
+            Position = UDim2.new(0, x, 0.5, 0),
+            AnchorPoint = Vector2.new(0, 0.5),
             Size = UDim2.new(0, size, 0, size),
+            Text = "",
             BackgroundTransparency = 1,
+            AutoButtonColor = false,
             Parent = parent,
         })
-        local placed = false
-        pcall(function()
-            if Creator and Creator.Image then
-                local ic = Creator.Image({
-                    Icon = iconName,
-                    Size = UDim2.new(0, size - 4, 0, size - 4),
-                    ThemeTag = "Icon",
-                })
-                if ic and ic.IconFrame then
-                    ic.IconFrame.Parent = holder
-                    ic.IconFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-                    ic.IconFrame.Position = UDim2.fromScale(0.5, 0.5)
-                    placed = true
-                end
-            end
-        end)
-        if not placed then
+        local img = New("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.new(0, size - 8, 0, size - 8),
+            BackgroundTransparency = 1,
+            ScaleType = Enum.ScaleType.Fit,
+            Parent = btn,
+        })
+        local asset = getIconImage(iconName)
+        if asset then
+            img.Image = asset
+            pcall(function() img.ImageColor3 = P.text end)
+            painted[#painted + 1] = { img, "ImageColor3", "text" }
+        else
+            img:Destroy()
             New("TextLabel", {
                 Size = UDim2.fromScale(1, 1),
                 BackgroundTransparency = 1,
-                Text = fallbackText or "",
-                TextSize = math.floor(size * 0.55),
+                Text = fallbackLetter or "?",
+                TextSize = 14,
                 Font = Enum.Font.GothamBold,
                 Bind = { TextColor3 = "text" },
-                Parent = holder,
+                Parent = btn,
             })
         end
-        return holder
+        if callback then btn.MouseButton1Click:Connect(callback) end
+        return btn
     end
 
     local tab = cfg.Tab or Window:Tab({ Title = cfg.Title or "Chat", Icon = cfg.Icon or "message-circle" })
@@ -255,7 +328,7 @@ function NeoChat.Init(WindUI, Window, cfg)
         end
     end)
 
-    local HEADER, INPUT_H, EMOJI_H, REPLY_H, PRIV_H = 40, 52, 140, 34, 20
+    local HEADER, INPUT_H, PANEL_H, REPLY_H, PRIV_H = 40, 48, 160, 34, 20
     local root = New("Frame", {
         Name = "NeoChat", Size = UDim2.fromScale(1, 1),
         BackgroundTransparency = 1, Parent = canvas
@@ -319,34 +392,49 @@ function NeoChat.Init(WindUI, Window, cfg)
         Bind = { TextColor3 = "text" }, Visible = false, Parent = root,
     })
 
-    local emojiPanel = New("Frame", {
+    -- Stickers / Private-picker panel
+    local panel = New("Frame", {
         AnchorPoint = Vector2.new(0, 1),
         Position = UDim2.new(0, 8, 1, -(INPUT_H)),
-        Size = UDim2.new(1, -16, 0, EMOJI_H - 8),
+        Size = UDim2.new(1, -16, 0, PANEL_H - 8),
         Bind = { BackgroundColor3 = "card" },
         Visible = false, ZIndex = 5, Parent = root,
     }, { corner(12) })
 
-    local catBar = New("Frame", {
-        Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, ZIndex = 6, Parent = emojiPanel
-    }, {
-        New("UIListLayout", {
-            FillDirection = Enum.FillDirection.Horizontal,
-            Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder
-        }),
-        pad(6, 2, 6, 0),
+    local panelTitle = New("TextLabel", {
+        Position = UDim2.new(0, 10, 0, 4), Size = UDim2.new(1, -20, 0, 20),
+        BackgroundTransparency = 1, Text = "Stickers",
+        TextSize = 12, Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Bind = { TextColor3 = "text" }, Parent = panel,
     })
 
-    local grid = New("ScrollingFrame", {
-        Position = UDim2.new(0, 0, 0, 30), Size = UDim2.new(1, 0, 1, -30),
+    local panelScroll = New("ScrollingFrame", {
+        Position = UDim2.new(0, 0, 0, 26), Size = UDim2.new(1, 0, 1, -30),
         BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3,
         CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
-        ZIndex = 6, Parent = emojiPanel,
+        ZIndex = 6, Parent = panel,
     }, {
-        New("UIGridLayout", { CellSize = UDim2.new(0, 34, 0, 34), CellPadding = UDim2.new(0, 4, 0, 4) }),
-        pad(8, 4, 8, 4),
+        New("UIGridLayout", {
+            CellSize = UDim2.new(0, 52, 0, 52),
+            CellPadding = UDim2.new(0, 6, 0, 6),
+            SortOrder = Enum.SortOrder.LayoutOrder,
+        }),
+        pad(8, 4, 8, 8),
     })
 
+    -- Private list mode uses vertical list
+    local privateList = New("ScrollingFrame", {
+        Position = UDim2.new(0, 0, 0, 26), Size = UDim2.new(1, 0, 1, -30),
+        BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3,
+        CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        Visible = false, ZIndex = 6, Parent = panel,
+    }, {
+        New("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 4) }),
+        pad(8, 4, 8, 8),
+    })
+
+    -------------------------------------------------------------- Reply bar
     local replyBar = New("Frame", {
         AnchorPoint = Vector2.new(0, 1),
         Position = UDim2.new(0, 8, 1, -(INPUT_H - 6)),
@@ -379,40 +467,23 @@ function NeoChat.Init(WindUI, Window, cfg)
         BackgroundTransparency = 1, Bind = { TextColor3 = "text" }, Parent = replyBar,
     })
 
+    -------------------------------------------------------------- Input row
     local inputRow = New("Frame", {
         AnchorPoint = Vector2.new(0, 1),
         Position = UDim2.new(0, 8, 1, -8),
-        Size = UDim2.new(1, -16, 0, 38),
+        Size = UDim2.new(1, -16, 0, 36),
         Bind = { BackgroundColor3 = "card" }, Parent = root,
     }, { corner(12) })
 
-    -- Input icons: WindUI names (smile / send), fallback plain text — NO emoji
-    local emojiBtn = New("TextButton", {
-        Position = UDim2.new(0, 4, 0, 4), Size = UDim2.new(0, 30, 0, 30),
-        Text = "", BackgroundTransparency = 1, Parent = inputRow,
-    })
-    makeWindIcon(emojiBtn, "smile", "+", 26).Position = UDim2.fromScale(0.5, 0.5)
-    makeWindIcon(emojiBtn, "smile", "+", 26).AnchorPoint = Vector2.new(0.5, 0.5)
-
-    local inviteBtn = New("TextButton", {
-        Position = UDim2.new(0, 36, 0, 4), Size = UDim2.new(0, 30, 0, 30),
-        Text = "", BackgroundTransparency = 1, Parent = inputRow,
-    })
-    do
-        local ic = makeWindIcon(inviteBtn, "send", ">", 26)
-        ic.AnchorPoint = Vector2.new(0.5, 0.5)
-        ic.Position = UDim2.fromScale(0.5, 0.5)
-    end
-
     local sendBtn = New("TextButton", {
         AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -4, 0.5, 0), Size = UDim2.new(0, 56, 0, 30),
+        Position = UDim2.new(1, -4, 0.5, 0), Size = UDim2.new(0, 54, 0, 28),
         Text = "Send", TextSize = 12, Font = Enum.Font.GothamBold,
         Bind = { BackgroundColor3 = "own", TextColor3 = "ownText" }, Parent = inputRow,
-    }, { corner(9) })
+    }, { corner(8) })
 
     local input = New("TextBox", {
-        Position = UDim2.new(0, 72, 0, 0), Size = UDim2.new(1, -72 - 62, 1, 0),
+        Position = UDim2.new(0, 72, 0, 0), Size = UDim2.new(1, -72 - 60, 1, 0),
         BackgroundTransparency = 1,
         PlaceholderText = "Type a message...",
         Text = "", ClearTextOnFocus = false, TextSize = 13,
@@ -420,18 +491,34 @@ function NeoChat.Init(WindUI, Window, cfg)
         Bind = { TextColor3 = "text", PlaceholderColor3 = "placeholder" }, Parent = inputRow,
     })
 
-    local function relayout()
+    -- forward decls for callbacks
+    local openStickersPanel, openPrivatePanel, sendInvite, doSend, send, setRoom, relayout
+
+    local stickerBtn = iconButton(inputRow, "sticker", "S", 6, 30, function()
+        if S.panelOpen and panelTitle.Text == "Stickers" then
+            S.panelOpen = false
+        else
+            openStickersPanel()
+        end
+        relayout()
+    end)
+
+    local inviteBtn = iconButton(inputRow, "send", "I", 38, 30, function()
+        sendInvite()
+    end)
+
+    function relayout()
         local extraTop = (S.kind == "private" and PRIV_H or 0)
-        local bottom = INPUT_H + (S.emojiOpen and EMOJI_H or 0) + (S.replyTo and REPLY_H or 0)
+        local bottom = INPUT_H + (S.panelOpen and PANEL_H or 0) + (S.replyTo and REPLY_H or 0)
         scroll.Position = UDim2.new(0, 0, 0, HEADER + extraTop)
         scroll.Size = UDim2.new(1, 0, 1, -(HEADER + extraTop + bottom))
-        emojiPanel.Visible = S.emojiOpen
+        panel.Visible = S.panelOpen
         replyBar.Visible = S.replyTo ~= nil
         privHeader.Visible = S.kind == "private"
         if S.replyTo then
-            replyBar.Position = UDim2.new(0, 8, 1, -(INPUT_H - 6 + (S.emojiOpen and EMOJI_H or 0)))
+            replyBar.Position = UDim2.new(0, 8, 1, -(INPUT_H - 6 + (S.panelOpen and PANEL_H or 0)))
         end
-        emojiPanel.Position = UDim2.new(0, 8, 1, -(INPUT_H + (S.replyTo and REPLY_H or 0)))
+        panel.Position = UDim2.new(0, 8, 1, -(INPUT_H + (S.replyTo and REPLY_H or 0)))
     end
 
     local function clearReply()
@@ -454,7 +541,97 @@ function NeoChat.Init(WindUI, Window, cfg)
     end
     replyClose.MouseButton1Click:Connect(clearReply)
 
-    -------------------------------------------------------------- Side notifs (MENTION ONLY)
+    -------------------------------------------------------------- Stickers panel builder
+    function openStickersPanel()
+        S.panelOpen = true
+        panelTitle.Text = "Stickers"
+        panelScroll.Visible = true
+        privateList.Visible = false
+        for _, c in ipairs(panelScroll:GetChildren()) do
+            if c:IsA("TextButton") or c:IsA("ImageButton") then c:Destroy() end
+        end
+        local order = StickerCatalog.Order
+        local stickers = StickerCatalog.Stickers
+        if not StickerCatalog.Ready or #order == 0 then
+            panelTitle.Text = "Stickers (loading...)"
+            task.delay(0.8, function()
+                if S.panelOpen and panelTitle.Text:find("loading") then
+                    openStickersPanel()
+                end
+            end)
+            return
+        end
+        local maxShow = math.min(80, #order)
+        for i = 1, maxShow do
+            local key = order[i]
+            local info = stickers[key]
+            if type(info) == "table" and info.Image then
+                local btn = New("ImageButton", {
+                    Size = UDim2.new(0, 52, 0, 52),
+                    BackgroundTransparency = 0.85,
+                    Image = tostring(info.Image),
+                    ScaleType = Enum.ScaleType.Fit,
+                    LayoutOrder = i,
+                    ZIndex = 7,
+                    Parent = panelScroll,
+                }, { corner(8) })
+                btn.MouseButton1Click:Connect(function()
+                    local payload = stickerPayload(info.Image)
+                    if payload then
+                        send(payload)
+                        S.panelOpen = false
+                        relayout()
+                    end
+                end)
+            end
+        end
+    end
+
+    function openPrivatePanel()
+        S.panelOpen = true
+        panelTitle.Text = "Private — choose player"
+        panelScroll.Visible = false
+        privateList.Visible = true
+        for _, c in ipairs(privateList:GetChildren()) do
+            if c:IsA("TextButton") then c:Destroy() end
+        end
+        local any = false
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer then
+                any = true
+                local label = cleanName(plr.DisplayName) .. "  @" .. cleanName(plr.Name)
+                local b = New("TextButton", {
+                    Size = UDim2.new(1, -4, 0, 32),
+                    Text = "  " .. label,
+                    TextSize = 13,
+                    Font = Enum.Font.GothamMedium,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Bind = { BackgroundColor3 = "other", TextColor3 = "text" },
+                    ZIndex = 7,
+                    Parent = privateList,
+                }, { corner(8) })
+                b.MouseButton1Click:Connect(function()
+                    S.panelOpen = false
+                    setRoom("private", plr.UserId, plr.DisplayName or plr.Name)
+                    relayout()
+                end)
+            end
+        end
+        if not any then
+            New("TextLabel", {
+                Size = UDim2.new(1, 0, 0, 28),
+                BackgroundTransparency = 1,
+                Text = "No other players in this server",
+                TextSize = 12,
+                Font = Enum.Font.Gotham,
+                TextTransparency = 0.4,
+                Bind = { TextColor3 = "text" },
+                Parent = privateList,
+            })
+        end
+    end
+
+    -------------------------------------------------------------- Side notifs (mention only)
     local sideGui, sideContainer
     local function ensureSideGui()
         if sideGui and sideGui.Parent then return end
@@ -513,7 +690,9 @@ function NeoChat.Init(WindUI, Window, cfg)
         msgL.Size = UDim2.new(1, 0, 0, 0)
         msgL.AutomaticSize = Enum.AutomaticSize.Y
         msgL.BackgroundTransparency = 1
-        msgL.Text = clipUtf8(tostring(m.text or ""), 68)
+        local preview = tostring(m.text or "")
+        if parseSticker(preview) then preview = "[Sticker]" end
+        msgL.Text = clipUtf8(preview, 68)
         msgL.TextColor3 = Color3.fromRGB(155, 155, 160)
         msgL.TextSize = 12
         msgL.Font = Enum.Font.Gotham
@@ -536,6 +715,7 @@ function NeoChat.Init(WindUI, Window, cfg)
         end)
     end
 
+    -------------------------------------------------------------- Badge
     local badge = New("Frame", {
         Name = "NeoBadge", AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, -10, 0.5, 0),
@@ -649,6 +829,7 @@ function NeoChat.Init(WindUI, Window, cfg)
         end)
     end
 
+    -------------------------------------------------------------- Render
     local function render(m, own, state)
         if m.deleted then return end
         emptyLbl.Visible = false
@@ -786,7 +967,28 @@ function NeoChat.Init(WindUI, Window, cfg)
             })
         end
 
-        if m.t == "invite" then
+        -- Sticker message?
+        local frames, interval = parseSticker(m.text)
+        if frames then
+            local stickerImg = New("ImageLabel", {
+                Size = UDim2.new(0, 96, 0, 96),
+                BackgroundTransparency = 1,
+                Image = frames[1],
+                ScaleType = Enum.ScaleType.Fit,
+                LayoutOrder = 2,
+                Parent = bubble,
+            }, { corner(8) })
+            if #frames > 1 then
+                task.spawn(function()
+                    local i = 1
+                    while stickerImg and stickerImg.Parent do
+                        i = i % #frames + 1
+                        stickerImg.Image = frames[i]
+                        task.wait(interval or 0.4)
+                    end
+                end)
+            end
+        elseif m.t == "invite" then
             label(textColor({ Text = "<b>Server invite</b>", TextSize = 13, Font = Enum.Font.GothamMedium, LayoutOrder = 2 }))
             label(textColor({ Text = esc(m.game or "Roblox"), TextSize = 12, Font = Enum.Font.Gotham, LayoutOrder = 3 }))
             local here = tostring(m.job) == game.JobId
@@ -882,6 +1084,7 @@ function NeoChat.Init(WindUI, Window, cfg)
             end)
         end
 
+        -- swipe to reply
         local dragStart, dragging = nil, false
         bubble.InputBegan:Connect(function(inp)
             if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
@@ -929,6 +1132,7 @@ function NeoChat.Init(WindUI, Window, cfg)
         if not TOAST or os.clock() - S.lastToast < 2.5 then return end
         S.lastToast = os.clock()
         local body = m.t == "invite" and "sent an invite" or clipUtf8(tostring(m.text or ""), 70)
+        if parseSticker(tostring(m.text or "")) then body = "sent a sticker" end
         pcall(function()
             WindUI:Notify({ Title = cleanName(m.dn or m.user or "Chat"), Content = body, Duration = 2.6, Icon = "message-circle" })
         end)
@@ -985,7 +1189,7 @@ function NeoChat.Init(WindUI, Window, cfg)
         return true
     end
 
-    local function send(text, extra)
+    function send(text, extra)
         text = clipUtf8(trim(text), MAXLEN)
         if text == "" and not extra then return false end
         if os.clock() - S.lastSend < COOLDOWN then
@@ -1037,7 +1241,19 @@ function NeoChat.Init(WindUI, Window, cfg)
         return true
     end
 
-    local function sendInvite()
+    function sendInvite()
+        local left = INVITE_COOLDOWN - (os.clock() - S.lastInvite)
+        if left > 0 then
+            pcall(function()
+                WindUI:Notify({
+                    Title = "Invite cooldown",
+                    Content = string.format("Wait %d seconds", math.ceil(left)),
+                    Duration = 2,
+                    Icon = "clock",
+                })
+            end)
+            return
+        end
         local info
         pcall(function() info = MarketplaceService:GetProductInfo(game.PlaceId) end)
         local ok = send(input.Text, {
@@ -1045,10 +1261,13 @@ function NeoChat.Init(WindUI, Window, cfg)
             game = info and info.Name or "Roblox",
             pc = #Players:GetPlayers(), mx = Players.MaxPlayers,
         })
-        if ok then input.Text = "" end
+        if ok then
+            S.lastInvite = os.clock()
+            input.Text = ""
+        end
     end
 
-    local function doSend()
+    function doSend()
         if send(input.Text) then input.Text = "" end
     end
 
@@ -1071,45 +1290,11 @@ function NeoChat.Init(WindUI, Window, cfg)
         privHeader.Text = "Chatting with " .. cleanName(name) .. typingTxt
     end
 
-    local function setRoom(kind, targetUid, targetName)
+    function setRoom(kind, targetUid, targetName)
         if kind ~= "global" and kind ~= "private" then return end
         if kind == "private" and not targetUid and not S.privateTarget then
-            local names, map = {}, {}
-            for _, plr in ipairs(Players:GetPlayers()) do
-                if plr ~= LocalPlayer then
-                    local label = cleanName(plr.DisplayName) .. "  @" .. cleanName(plr.Name)
-                    names[#names + 1] = label
-                    map[label] = plr
-                end
-            end
-            if #names == 0 then
-                pcall(function()
-                    WindUI:Notify({ Title = "Private", Content = "No other players here", Duration = 2, Icon = "users" })
-                end)
-                return
-            end
-            local buttons = {}
-            for i = 1, math.min(8, #names) do
-                local label = names[i]
-                buttons[#buttons + 1] = {
-                    Title = label,
-                    Variant = i == 1 and "Primary" or "Tertiary",
-                    Callback = function()
-                        local plr = map[label]
-                        if plr then
-                            setRoom("private", plr.UserId, plr.DisplayName or plr.Name)
-                        end
-                    end,
-                }
-            end
-            buttons[#buttons + 1] = { Title = "Cancel", Variant = "Tertiary", Callback = function() end }
-            pcall(function()
-                Window:Dialog({
-                    Title = "Private Chat",
-                    Content = "Choose a player:",
-                    Buttons = buttons,
-                })
-            end)
+            openPrivatePanel()
+            relayout()
             return
         end
         if kind == S.kind and S.loaded and (kind ~= "private" or targetUid == S.privateTarget) then return end
@@ -1139,37 +1324,16 @@ function NeoChat.Init(WindUI, Window, cfg)
         end)
     end
 
-    pillBtns.global.MouseButton1Click:Connect(function() setRoom("global") end)
-    pillBtns.private.MouseButton1Click:Connect(function() setRoom("private") end)
+    pillBtns.global.MouseButton1Click:Connect(function()
+        S.panelOpen = false
+        setRoom("global")
+    end)
+    pillBtns.private.MouseButton1Click:Connect(function()
+        setRoom("private")
+    end)
     refreshPills()
     onTheme[#onTheme + 1] = refreshPills
 
-    -- Emoji content panel: category labels are plain text (Faces/Hands/...), not emoji icons
-    local catBtns = {}
-    local function showCategory(idx)
-        for i, b in ipairs(catBtns) do b.BackgroundTransparency = (i == idx) and 0.7 or 1 end
-        for _, c in ipairs(grid:GetChildren()) do if c:IsA("TextButton") then c:Destroy() end end
-        for e in EMOJI_CONTENT[idx][2]:gmatch("%S+") do
-            local b = New("TextButton", {
-                Text = e, TextSize = 20, BackgroundTransparency = 1,
-                Font = Enum.Font.Gotham, ZIndex = 7, Parent = grid,
-            })
-            b.MouseButton1Click:Connect(function() input.Text = input.Text .. e end)
-        end
-    end
-    for i, cat in ipairs(EMOJI_CONTENT) do
-        local b = New("TextButton", {
-            Size = UDim2.new(0, 48, 0, 24), Text = cat[1], TextSize = 11,
-            Font = Enum.Font.GothamMedium, LayoutOrder = i,
-            Bind = { BackgroundColor3 = "text", TextColor3 = "text" },
-            BackgroundTransparency = 1, ZIndex = 7, Parent = catBar,
-        }, { corner(6) })
-        catBtns[i] = b
-        b.MouseButton1Click:Connect(function() showCategory(i) end)
-    end
-    showCategory(1)
-    emojiBtn.MouseButton1Click:Connect(function() S.emojiOpen = not S.emojiOpen; relayout() end)
-    inviteBtn.MouseButton1Click:Connect(sendInvite)
     sendBtn.MouseButton1Click:Connect(doSend)
     input.FocusLost:Connect(function(enter)
         if enter then doSend(); task.defer(function() input:CaptureFocus() end) end
@@ -1193,7 +1357,7 @@ function NeoChat.Init(WindUI, Window, cfg)
         pcall(function()
             Window:Dialog({
                 Title = "Chat notifications",
-                Content = "Show a small transparent card on the right only when someone mentions you?\n\nChange later in Settings.",
+                Content = "Show a small transparent card on the right only when someone mentions you?",
                 Buttons = {
                     { Title = "Yes", Variant = "Primary", Callback = function()
                         Settings.SideNotifs = true

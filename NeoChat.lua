@@ -1,6 +1,19 @@
+--[[
+    NeoChat v3.2  —  Firebase chat for WindUI  (Neo Hyper)
+    Full feature pack:
+    - All Yin stickers + favorites strip
+    - Image-only sticker display (never shows [[STICKER]] text)
+    - Icon actions + long-press menu + double-tap react
+    - Pinned message (owners) | Search | Mute room
+    - Online list | Recent DMs | Unread private badge
+    - Compact mode | Chat accent theme
+    - Profile peek | Friend request nudge
+    - Owners: v_orc, n_oqv
+]]
+
 local NeoChat = {
     DatabaseURL = "https://neohyper-9a843-default-rtdb.europe-west1.firebasedatabase.app",
-    Version = "3.1",
+    Version = "3.2",
     StickersURL = "https://raw.githubusercontent.com/Sephtis32/Yin-stickers/refs/heads/main/YinYang_Stickers.lua",
 }
 
@@ -1096,6 +1109,14 @@ function NeoChat.Init(WindUI, Window, cfg)
         end
     end
 
+    local function maskOnlineName(name)
+        name = tostring(name or "?")
+        -- show first 2 letters only, rest as stars
+        local visible = name:sub(1, 2)
+        local rest = math.max(3, math.min(8, #name - 2))
+        return visible .. string.rep("*", rest)
+    end
+
     function openOnlinePanel()
         S.panelOpen = true
         panelTitle.Text = "Online now"
@@ -1110,7 +1131,7 @@ function NeoChat.Init(WindUI, Window, cfg)
             count = count + 1
             New("TextLabel", {
                 Size = UDim2.new(1, 0, 0, 22), BackgroundTransparency = 1,
-                Text = "  ●  " .. cleanName(name),
+                Text = "  ●  " .. maskOnlineName(name),
                 TextSize = 12, Font = Enum.Font.Gotham,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 TextColor3 = Color3.fromRGB(80, 200, 120), Parent = privateList,
@@ -1503,18 +1524,31 @@ function NeoChat.Init(WindUI, Window, cfg)
             end
         end
 
+        -- React chips as a small bubble under the message (never as a new chat message)
         if m.reacts and type(m.reacts) == "table" then
             local rtxt = {}
             for emoji, cnt in pairs(m.reacts) do
                 if type(cnt) == "number" and cnt > 0 then
-                    rtxt[#rtxt + 1] = emoji .. (cnt > 1 and (" " .. cnt) or "")
+                    rtxt[#rtxt + 1] = emoji .. (cnt > 1 and ("×" .. cnt) or "")
                 end
             end
             if #rtxt > 0 then
-                label(textColor({
+                local chip = New("Frame", {
+                    Size = UDim2.new(0, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.XY,
+                    BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+                    BackgroundTransparency = 0.45,
+                    LayoutOrder = 8, Parent = bubble,
+                }, {
+                    corner(10), pad(6, 2, 6, 2),
+                })
+                New("TextLabel", {
+                    Size = UDim2.new(0, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.XY,
+                    BackgroundTransparency = 1,
                     Text = table.concat(rtxt, "  "),
-                    TextSize = 12, Font = Enum.Font.Gotham, LayoutOrder = 8, TextTransparency = 0.15,
-                }))
+                    TextSize = 12, Font = Enum.Font.Gotham,
+                    TextColor3 = Color3.new(1, 1, 1),
+                    Parent = chip,
+                })
             end
         end
 
@@ -1853,9 +1887,45 @@ function NeoChat.Init(WindUI, Window, cfg)
     end)
 
     -- close overlays on background click
+    local function dismissOverlays()
+        hideCtx()
+        hideProfile()
+        if quickReply.Visible then
+            quickReply.Visible = false
+            -- keep reply bar (quote) so user can still type; only close the quick menu
+            relayout()
+        end
+    end
+
     scroll.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            hideCtx(); hideProfile()
+        if inp.UserInputType == Enum.UserInputType.MouseButton1
+            or inp.UserInputType == Enum.UserInputType.Touch then
+            dismissOverlays()
+        end
+    end)
+
+    -- global click-away for quick reply / menus
+    UserInputService.InputBegan:Connect(function(inp, gp)
+        if gp then return end
+        if inp.UserInputType == Enum.UserInputType.MouseButton1
+            or inp.UserInputType == Enum.UserInputType.Touch then
+            -- delay one frame so button clicks on the menu itself still register
+            task.defer(function()
+                if not quickReply.Visible and not ctxMenu.Visible and not profileCard.Visible then return end
+                -- if click was not on an overlay child, dismiss
+                local pos = inp.Position
+                local function contains(gui)
+                    if not gui or not gui.Visible or not gui.Parent then return false end
+                    local abs = gui.AbsolutePosition
+                    local size = gui.AbsoluteSize
+                    return pos.X >= abs.X and pos.X <= abs.X + size.X
+                        and pos.Y >= abs.Y and pos.Y <= abs.Y + size.Y
+                end
+                if contains(quickReply) or contains(ctxMenu) or contains(profileCard) or contains(replyBar) then
+                    return
+                end
+                dismissOverlays()
+            end)
         end
     end)
 

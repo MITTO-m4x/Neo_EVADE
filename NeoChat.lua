@@ -1,5 +1,5 @@
 --[[
-    NeoChat v3.2  —  Firebase chat for WindUI  (Neo Hyper)
+    NeoChat v3.2.1  —  Firebase chat for WindUI  (Neo Hyper)
     Full feature pack:
     - All Yin stickers + favorites strip
     - Image-only sticker display (never shows [[STICKER]] text)
@@ -13,7 +13,7 @@
 
 local NeoChat = {
     DatabaseURL = "https://neohyper-9a843-default-rtdb.europe-west1.firebasedatabase.app",
-    Version = "3.2",
+    Version = "3.2.1",
     StickersURL = "https://raw.githubusercontent.com/Sephtis32/Yin-stickers/refs/heads/main/YinYang_Stickers.lua",
 }
 
@@ -39,8 +39,18 @@ pcall(function()
     if IconsLib and IconsLib.SetIconsType then pcall(function() IconsLib.SetIconsType("lucide") end) end
 end)
 local function getIconImage(name)
-    if not IconsLib or not IconsLib.GetIcon then return nil end
-    local ok, img = pcall(function() return IconsLib.GetIcon(name) end)
+    if not IconsLib then return nil end
+    local ok, img = pcall(function()
+        if IconsLib.GetIcon then
+            return IconsLib.GetIcon(name)
+        end
+        return nil
+    end)
+    if ok and type(img) == "string" and img ~= "" then return img end
+    ok, img = pcall(function()
+        if type(IconsLib) == "table" and IconsLib[name] then return IconsLib[name] end
+        return nil
+    end)
     if ok and type(img) == "string" and img ~= "" then return img end
     return nil
 end
@@ -247,7 +257,16 @@ function NeoChat.Init(WindUI, Window, cfg)
 
     local Creator = WindUI and WindUI.Creator
     local function themeColor(tag, default)
-        local ok, c = pcall(function() return Creator.GetThemeProperty(tag, WindUI.Theme) end)
+        local ok, c = pcall(function()
+            if not Creator then return nil end
+            if Creator.GetThemeProperty then
+                return Creator.GetThemeProperty(tag, WindUI and WindUI.Theme)
+            end
+            if type(Creator.GetThemeProperty) == "function" then
+                return Creator:GetThemeProperty(tag, WindUI and WindUI.Theme)
+            end
+            return nil
+        end)
         if ok and typeof(c) == "Color3" then return c end
         return default
     end
@@ -290,7 +309,9 @@ function NeoChat.Init(WindUI, Window, cfg)
         props.Bind = nil
         local o
         if Creator and Creator.New then
-            local ok, obj = pcall(Creator.New, class, props, children)
+            local ok, obj = pcall(function()
+                return Creator:New(class, props, children)
+            end)
             if ok and obj then o = obj end
         end
         if not o then
@@ -341,19 +362,55 @@ function NeoChat.Init(WindUI, Window, cfg)
         return btn
     end
 
-    local tab = cfg.Tab or Window:Tab({ Title = cfg.Title or "Chat", Icon = cfg.Icon or "message-circle" })
-    local canvas = tab.UIElements.ContainerFrameCanvas
-    local sideBtn = tab.UIElements.Main
+    local tab = cfg.Tab
+    if not tab then
+        local okTab, t = pcall(function()
+            return Window:Tab({ Title = cfg.Title or "Chat", Icon = cfg.Icon or "message-circle" })
+        end)
+        if okTab then tab = t end
+    end
+    assert(tab, "NeoChat: Chat tab is missing")
+
+    local function resolveTabCanvas(t)
+        local ue = t and t.UIElements
+        if type(ue) == "table" or typeof(ue) == "Instance" then
+            local c = ue.ContainerFrameCanvas or ue.ContainerCanvas or ue.Canvas or ue.Container
+            if c then return c, ue.Main or ue.Button or ue.TabButton or t end
+            if ue.ContainerFrame then return ue.ContainerFrame, ue.Main or t end
+        end
+        -- fallbacks used by some WindUI forks
+        if t.ContainerFrameCanvas then return t.ContainerFrameCanvas, t end
+        if t.Canvas then return t.Canvas, t end
+        if t.Frame then return t.Frame, t end
+        return nil, t
+    end
+
+    local canvas, sideBtn = resolveTabCanvas(tab)
+    if not canvas then
+        -- last resort: create our own holder inside the window if possible
+        local host = nil
+        pcall(function() host = Window.UIElements and Window.UIElements.Main end)
+        canvas = Instance.new("Frame")
+        canvas.Name = "NeoChatFallbackCanvas"
+        canvas.BackgroundTransparency = 1
+        canvas.Size = UDim2.fromScale(1, 1)
+        canvas.Parent = host or game:GetService("CoreGui")
+        sideBtn = sideBtn or tab
+        warn("[NeoChat] UIElements.ContainerFrameCanvas missing — using fallback canvas")
+    end
+    sideBtn = sideBtn or tab
 
     task.spawn(function()
         for _ = 1, 2 do
             task.wait(0.25)
             pcall(function()
+                local ue = tab.UIElements
+                if not ue or not ue.ContainerFrame then return end
                 local dummy = Instance.new("Frame")
                 dummy.Size = UDim2.new(0, 0, 0, 0)
                 dummy.BackgroundTransparency = 1
-                dummy.Parent = tab.UIElements.ContainerFrame
-                tab.UIElements.ContainerFrame.Visible = false
+                dummy.Parent = ue.ContainerFrame
+                ue.ContainerFrame.Visible = false
             end)
         end
     end)
@@ -1255,7 +1312,9 @@ function NeoChat.Init(WindUI, Window, cfg)
         S.lastBadge = n
     end
     local function viewing()
-        return canvas.Visible and not Window.Closed and not Window.Destroyed
+        local closed = false
+        pcall(function() closed = Window.Closed == true or Window.Destroyed == true end)
+        return canvas and canvas.Visible and not closed
     end
     local function clearUnread()
         if next(S.unread) ~= nil then S.unread = {} end
@@ -1956,7 +2015,7 @@ function NeoChat.Init(WindUI, Window, cfg)
     end)
 
     task.spawn(function()
-        while S.alive and not Window.Destroyed do
+        while S.alive and not (Window and Window.Destroyed) do
             local ok = pollOnce()
             S.fails = ok and 0 or math.min(S.fails + 1, 5)
             if viewing() then clearUnread() end
@@ -1973,7 +2032,7 @@ function NeoChat.Init(WindUI, Window, cfg)
     end
 
     task.spawn(function()
-        while S.alive and not Window.Destroyed do
+        while S.alive and not (Window and Window.Destroyed) do
             call("PUT", urlFor("presence/" .. ME_ID), encode({ n = ME_NAME, t = { [".sv"] = "timestamp" } }))
             local ok, body = call("GET", urlFor("presence"))
             if ok then
@@ -2022,7 +2081,7 @@ function NeoChat.Init(WindUI, Window, cfg)
 
     task.spawn(function()
         local last
-        while S.alive and not Window.Destroyed do
+        while S.alive and not (Window and Window.Destroyed) do
             local ok, name = pcall(function() return WindUI:GetCurrentTheme() end)
             if ok and name ~= last then last = name; applyTheme() end
             task.wait(0.8)

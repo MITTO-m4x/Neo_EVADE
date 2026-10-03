@@ -1,5 +1,5 @@
 --[[
-    NeoChat v3.2.1  —  Firebase chat for WindUI  (Neo Hyper)
+    NeoChat v3.2.3  —  Firebase chat for WindUI  (Neo Hyper)
     Full feature pack:
     - All Yin stickers + favorites strip
     - Image-only sticker display (never shows [[STICKER]] text)
@@ -13,9 +13,48 @@
 
 local NeoChat = {
     DatabaseURL = "https://neohyper-9a843-default-rtdb.europe-west1.firebasedatabase.app",
-    Version = "3.2.1",
+    Version = "3.2.3",
     StickersURL = "https://raw.githubusercontent.com/Sephtis32/Yin-stickers/refs/heads/main/YinYang_Stickers.lua",
 }
+
+-- Safe globals (some executors lack getgenv / table.clear / utf8 helpers)
+local function envGet()
+    if type(getgenv) == "function" then
+        local ok, g = pcall(getgenv)
+        if ok and type(g) == "table" then return g end
+    end
+    if type(_G) == "table" then return _G end
+    return shared or {}
+end
+local function tableClear(t)
+    if type(t) ~= "table" then return end
+    if type(table.clear) == "function" then
+        table.clear(t)
+        return
+    end
+    for k in pairs(t) do t[k] = nil end
+end
+local function utf8Codes(str)
+    if utf8 and type(utf8.codes) == "function" then
+        return utf8.codes(str)
+    end
+    -- fallback: byte iterator (ASCII-ish)
+    local i = 0
+    local s = tostring(str or "")
+    return function()
+        i = i + 1
+        if i > #s then return nil end
+        return i, string.byte(s, i)
+    end
+end
+local function utf8Char(code)
+    if utf8 and type(utf8.char) == "function" then
+        return utf8.char(code)
+    end
+    code = tonumber(code) or 63
+    if code >= 0 and code < 128 then return string.char(code) end
+    return "?"
+end
 
 local cr = cloneref or function(x) return x end
 local Players          = cr(game:GetService("Players"))
@@ -35,7 +74,9 @@ local ME_IS_OWNER = isOwner(LocalPlayer.Name)
 ------------------------------------------------------------------ Icons
 local IconsLib = nil
 pcall(function()
-    IconsLib = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/Footagesus/Icons/main/Main-v2.lua"))()
+    local fetch = game.HttpGetAsync or game.HttpGet
+    local raw = fetch(game, "https://raw.githubusercontent.com/Footagesus/Icons/main/Main-v2.lua")
+    IconsLib = loadstring(raw)()
     if IconsLib and IconsLib.SetIconsType then pcall(function() IconsLib.SetIconsType("lucide") end) end
 end)
 local function getIconImage(name)
@@ -153,9 +194,9 @@ local function loadSettings()
         RecentDMs = {},
         SearchOpen = false,
     }
-    local s = getgenv().NeoChatSettings
+    local s = envGet().NeoChatSettings
     if type(s) ~= "table" then
-        getgenv().NeoChatSettings = def
+        envGet().NeoChatSettings = def
         return def
     end
     for k, v in pairs(def) do
@@ -225,7 +266,7 @@ function NeoChat.Init(WindUI, Window, cfg)
     end
     local function toggleMute()
         Settings.MutedRooms[S.room] = not isMuted()
-        getgenv().NeoChatSettings = Settings
+        envGet().NeoChatSettings = Settings
         return isMuted()
     end
 
@@ -239,7 +280,7 @@ function NeoChat.Init(WindUI, Window, cfg)
             if #out >= 12 then break end
         end
         Settings.RecentDMs = out
-        getgenv().NeoChatSettings = Settings
+        envGet().NeoChatSettings = Settings
     end
 
     local function pushStickerFav(image)
@@ -252,7 +293,7 @@ function NeoChat.Init(WindUI, Window, cfg)
             if #out >= 8 then break end
         end
         Settings.StickerFavs = out
-        getgenv().NeoChatSettings = Settings
+        envGet().NeoChatSettings = Settings
     end
 
     local Creator = WindUI and WindUI.Creator
@@ -727,7 +768,7 @@ function NeoChat.Init(WindUI, Window, cfg)
     searchToggleBtn = iconButton(utilBar, "search", "?", 0, 26, function()
         Settings.SearchOpen = not Settings.SearchOpen
         if not Settings.SearchOpen then S.searchQuery = ""; searchBox.Text = "" end
-        getgenv().NeoChatSettings = Settings
+        envGet().NeoChatSettings = Settings
         relayout()
         -- refilter
         for _, c in ipairs(scroll:GetChildren()) do
@@ -996,7 +1037,7 @@ function NeoChat.Init(WindUI, Window, cfg)
                 LayoutOrder = #ctxMenu:GetChildren(), Parent = ctxMenu,
                 ZIndex = 45,
             }, { corner(6) })
-            b.MouseButton1Click:Connect(function() hideCtx(); menuDim.Visible = false; cb() end)
+            b.MouseButton1Click:Connect(function() hideCtx(); if menuDim then menuDim.Visible = false end; cb() end)
         end
         if not parseSticker(m.text) then
             item("Copy", function()
@@ -1042,7 +1083,7 @@ function NeoChat.Init(WindUI, Window, cfg)
         end
         ctxMenu.ZIndex = 45
         ctxMenu.Position = UDim2.new(0, math.floor(ax), 0, math.floor(ay))
-        menuDim.Visible = true
+        if menuDim then menuDim.Visible = true end
         ctxMenu.Visible = true
     end
 
@@ -1210,10 +1251,10 @@ function NeoChat.Init(WindUI, Window, cfg)
         name = name:gsub("[%c%z]", "")
         local first2 = ""
         local count = 0
-        for _, code in utf8.codes(name) do
+        for _, code in utf8Codes(name) do
             count = count + 1
             if count <= 2 then
-                first2 = first2 .. utf8.char(code)
+                first2 = first2 .. utf8Char(code)
             end
         end
         if first2 == "" then first2 = "??" end
@@ -1247,9 +1288,11 @@ function NeoChat.Init(WindUI, Window, cfg)
                         end
                     end
                     S.onlineMap = map
-                    S.online = math.max(1, (function()
-                        local n = 0 for _ in pairs(map) do n = n + 1 end return n
-                    end)())
+                    do
+                        local n = 0
+                        for _ in pairs(map) do n = n + 1 end
+                        S.online = math.max(1, n)
+                    end
                 end
             end
             if not privateList.Parent then return end
@@ -2038,7 +2081,7 @@ function NeoChat.Init(WindUI, Window, cfg)
         end
         S.gen = S.gen + 1
         S.lastKey, S.loaded, S.seen, S.pending, S.shown = nil, false, {}, {}, 0
-        table.clear(msgUi)
+        tableClear(msgUi)
         S.pin = nil
         for _, c in ipairs(scroll:GetChildren()) do if c:IsA("Frame") then c:Destroy() end end
         emptyLbl.Text = "Loading..."; emptyLbl.Visible = true
@@ -2117,17 +2160,17 @@ function NeoChat.Init(WindUI, Window, cfg)
         if Settings.FirstAskDone then return end
         if not Window or not Window.Dialog then return end
         Settings.FirstAskDone = true
-        getgenv().NeoChatSettings = Settings
+        envGet().NeoChatSettings = Settings
         pcall(function()
             Window:Dialog({
                 Title = "Chat notifications",
                 Content = "Show a small transparent card on the right only when someone mentions you?",
                 Buttons = {
                     { Title = "Yes", Variant = "Primary", Callback = function()
-                        Settings.SideNotifs = true; getgenv().NeoChatSettings = Settings
+                        Settings.SideNotifs = true; envGet().NeoChatSettings = Settings
                     end },
                     { Title = "No", Variant = "Tertiary", Callback = function()
-                        Settings.SideNotifs = false; getgenv().NeoChatSettings = Settings
+                        Settings.SideNotifs = false; envGet().NeoChatSettings = Settings
                     end },
                 },
             })
@@ -2220,17 +2263,17 @@ function NeoChat.Init(WindUI, Window, cfg)
     function Chat:SetRoom(kind, targetUid, targetName) return setRoom(kind, targetUid, targetName) end
     function Chat:Unread() return unreadCount() end
     function Chat:SetSideNotifs(on)
-        Settings.SideNotifs = on == true; getgenv().NeoChatSettings = Settings
+        Settings.SideNotifs = on == true; envGet().NeoChatSettings = Settings
     end
     function Chat:SetMentions(on)
-        Settings.MentionsEnabled = on == true; getgenv().NeoChatSettings = Settings
+        Settings.MentionsEnabled = on == true; envGet().NeoChatSettings = Settings
     end
     function Chat:SetCompact(on)
-        Settings.CompactMode = on == true; getgenv().NeoChatSettings = Settings
+        Settings.CompactMode = on == true; envGet().NeoChatSettings = Settings
     end
     function Chat:SetAccent(name)
         if ACCENTS[name] ~= nil or name == "default" then
-            Settings.ChatAccent = name; getgenv().NeoChatSettings = Settings; applyTheme()
+            Settings.ChatAccent = name; envGet().NeoChatSettings = Settings; applyTheme()
         end
     end
     function Chat:GetSettings() return Settings end
@@ -2242,8 +2285,8 @@ function NeoChat.Init(WindUI, Window, cfg)
         pcall(function() if sideGui then sideGui:Destroy() end end)
     end
 
-    getgenv().NeoChatController = Chat
-    getgenv().NeoChatSettings = Settings
+    envGet().NeoChatController = Chat
+    envGet().NeoChatSettings = Settings
     return Chat
 end
 
@@ -2251,7 +2294,7 @@ function NeoChat.AddChat(a, b, c)
     local Window, cfg
     if a == NeoChat then Window, cfg = b, c else Window, cfg = a, b end
     cfg = cfg or {}
-    local WindUI = cfg.WindUI or (getgenv and getgenv().WindUI) or _G.WindUI
+    local WindUI = cfg.WindUI or envGet().WindUI or _G.WindUI or (shared and shared.WindUI)
     assert(WindUI, "NeoChat: WindUI not found (pass cfg.WindUI)")
     return NeoChat.Init(WindUI, Window, cfg)
 end

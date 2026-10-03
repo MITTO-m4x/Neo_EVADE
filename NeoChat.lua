@@ -1,16 +1,3 @@
---[[
-    NeoChat v3.1  —  Firebase chat for WindUI  (Neo Hyper)
-    Full feature pack:
-    - All Yin stickers + favorites strip
-    - Image-only sticker display (never shows [[STICKER]] text)
-    - Icon actions + long-press menu + double-tap react
-    - Pinned message (owners) | Search | Mute room
-    - Online list | Recent DMs | Unread private badge
-    - Compact mode | Chat accent theme
-    - Profile peek | Friend request nudge
-    - Owners: v_orc, n_oqv
-]]
-
 local NeoChat = {
     DatabaseURL = "https://neohyper-9a843-default-rtdb.europe-west1.firebasedatabase.app",
     Version = "3.1",

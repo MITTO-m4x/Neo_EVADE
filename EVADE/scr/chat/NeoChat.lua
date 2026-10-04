@@ -338,15 +338,18 @@ function NeoChat.Init(WindUI, Window, cfg)
 
     local Creator = WindUI and WindUI.Creator
     local function themeColor(tag, default)
+        if not Creator then return default end
+        local fn = Creator.GetThemeProperty
+        if type(fn) ~= "function" then return default end
+
+        -- WindUI forks expose this either as a plain function or as a method.
         local ok, c = pcall(function()
-            if not Creator then return nil end
-            if Creator.GetThemeProperty then
-                return Creator.GetThemeProperty(tag, WindUI and WindUI.Theme)
-            end
-            if type(Creator.GetThemeProperty) == "function" then
-                return Creator:GetThemeProperty(tag, WindUI and WindUI.Theme)
-            end
-            return nil
+            return fn(tag, WindUI and WindUI.Theme)
+        end)
+        if ok and typeof(c) == "Color3" then return c end
+
+        ok, c = pcall(function()
+            return Creator:GetThemeProperty(tag, WindUI and WindUI.Theme)
         end)
         if ok and typeof(c) == "Color3" then return c end
         return default
@@ -389,11 +392,20 @@ function NeoChat.Init(WindUI, Window, cfg)
         local binds = props.Bind
         props.Bind = nil
         local o
-        if Creator and Creator.New then
+        if Creator and type(Creator.New) == "function" then
+            local fn = Creator.New
             local ok, obj = pcall(function()
-                return Creator:New(class, props, children)
+                return fn(Creator, class, props, children)
             end)
-            if ok and obj then o = obj end
+            if ok and obj then
+                o = obj
+            else
+                -- Some forks expose Creator.New as a plain function.
+                ok, obj = pcall(function()
+                    return fn(class, props, children)
+                end)
+                if ok and obj then o = obj end
+            end
         end
         if not o then
             o = Instance.new(class)
@@ -931,7 +943,6 @@ function NeoChat.Init(WindUI, Window, cfg)
         scroll.Position = UDim2.new(0, 0, 0, HEADER + extraTop)
         scroll.Size = UDim2.new(1, 0, 1, -(HEADER + extraTop + bottom))
         privHeader.Visible = S.kind == "private"
-    end
     end
 
     local function clearReply()
@@ -2132,7 +2143,9 @@ function NeoChat.Init(WindUI, Window, cfg)
         if text == "" and not extra then return false end
         if os.clock() - S.lastSend < COOLDOWN then
             pcall(function()
-                WindUI:Notify({ Title = "Slow down", Content = "Wait a second", Duration = 1.6, Icon = "clock" })
+                if type(WindUI.Notify) == "function" then
+                    WindUI:Notify({ Title = "Slow down", Content = "Wait a second", Duration = 1.6, Icon = "clock" })
+                end
             end)
             return false
         end
@@ -2418,7 +2431,10 @@ function NeoChat.Init(WindUI, Window, cfg)
     task.spawn(function()
         local last
         while S.alive and not (Window and Window.Destroyed) do
-            local ok, name = pcall(function() return WindUI:GetCurrentTheme() end)
+            local ok, name = pcall(function()
+                if type(WindUI.GetCurrentTheme) ~= "function" then return nil end
+                return WindUI:GetCurrentTheme()
+            end)
             if ok and name ~= last then last = name; applyTheme() end
             task.wait(0.8)
         end

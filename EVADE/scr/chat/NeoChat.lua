@@ -87,16 +87,17 @@ pcall(function()
     if IconsLib and IconsLib.SetIconsType then pcall(function() IconsLib.SetIconsType("lucide") end) end
 end)
 local function getIconImage(name)
-    if not IconsLib then return nil end
+    if not IconsLib or not name then return nil end
     local ok, img = pcall(function()
-        if IconsLib.GetIcon then
+        if type(IconsLib.Icon) == "function" then
+            return IconsLib.Icon(name)
+        end
+        if type(IconsLib.GetIcon) == "function" then
             return IconsLib.GetIcon(name)
         end
-        return nil
-    end)
-    if ok and type(img) == "string" and img ~= "" then return img end
-    ok, img = pcall(function()
-        if type(IconsLib) == "table" and IconsLib[name] then return IconsLib[name] end
+        if type(IconsLib) == "table" and type(IconsLib[name]) == "string" then
+            return IconsLib[name]
+        end
         return nil
     end)
     if ok and type(img) == "string" and img ~= "" then return img end
@@ -147,7 +148,14 @@ local function cleanName(s)
     return s
 end
 
-local REACT_SET = { "❤️", "😂", "🔥", "👍", "😮", "😢" }
+local REACT_SET = {
+    { value = "❤️", icon = "heart", label = "Like" },
+    { value = "😂", icon = "laugh", label = "Laugh" },
+    { value = "🔥", icon = "flame", label = "Fire" },
+    { value = "👍", icon = "thumbs-up", label = "Like" },
+    { value = "😮", icon = "circle-alert", label = "Wow" },
+    { value = "😢", icon = "frown", label = "Sad" },
+}
 local INVITE_COOLDOWN = 30
 
 ------------------------------------------------------------------ Stickers
@@ -423,6 +431,44 @@ function NeoChat.Init(WindUI, Window, cfg)
             PaddingRight = UDim.new(0, r), PaddingBottom = UDim.new(0, b)
         })
     end
+    local function glass(parent, radius, strokeTransparency)
+        radius = radius or 12
+        strokeTransparency = strokeTransparency or 0.72
+        corner(radius).Parent = parent
+        New("UIStroke", {
+            Color = P.text,
+            Transparency = strokeTransparency,
+            Thickness = 1,
+            Parent = parent,
+        })
+        local g = New("UIGradient", {
+            Rotation = 90,
+            Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, P.text),
+                ColorSequenceKeypoint.new(1, P.bg),
+            }),
+            Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.90),
+                NumberSequenceKeypoint.new(0.45, 0.94),
+                NumberSequenceKeypoint.new(1, 0.86),
+            }),
+            Parent = parent,
+        })
+        onTheme[#onTheme + 1] = function()
+            pcall(function()
+                g.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, P.text),
+                    ColorSequenceKeypoint.new(1, P.bg),
+                })
+                g.Transparency = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 0.90),
+                    NumberSequenceKeypoint.new(0.45, 0.94),
+                    NumberSequenceKeypoint.new(1, 0.86),
+                })
+            end)
+        end
+        return parent
+    end
 
     local function iconButton(parent, iconName, fallbackLetter, x, size, callback)
         size = size or 28
@@ -509,15 +555,16 @@ function NeoChat.Init(WindUI, Window, cfg)
     end)
 
     local HEADER, INPUT_H, PANEL_H, REPLY_H, PRIV_H, PIN_H, SEARCH_H = 40, 42, 160, 28, 18, 26, 28
+    local SAFE_BOTTOM = 10
     local relayout, addReact -- forward declared (used by callbacks defined earlier than their bodies)
     local root = New("Frame", {
         Name = "NeoChat", Size = UDim2.fromScale(1, 1),
         BackgroundTransparency = 1, Parent = canvas,
     })
-    local chatScale = tonumber(Settings.ChatScale) or tonumber(envGet().NeoChatScale) or 1.08
+    local chatScale = tonumber(Settings.ChatScale) or tonumber(envGet().NeoChatScale) or 1.0
     local rootScale = New("UIScale", { Scale = chatScale, Parent = root })
     local function applyChatScale(sc)
-        sc = math.clamp(tonumber(sc) or 1.08, 0.7, 1.5)
+        sc = math.clamp(tonumber(sc) or 1.0, 0.75, 1.15)
         Settings.ChatScale = sc
         envGet().NeoChatScale = sc
         rootScale.Scale = sc
@@ -547,8 +594,10 @@ function NeoChat.Init(WindUI, Window, cfg)
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, -10, 0, HEADER / 2),
         Size = UDim2.new(0, 158, 0, 26),
+        BackgroundTransparency = 0.18,
         Bind = { BackgroundColor3 = "card" }, Parent = root,
-    }, { corner(13) })
+    })
+    glass(pills, 13, 0.78)
 
     local pillBtns = {}
     local dmBadgeRefs = { badge = nil, label = nil } -- never set custom fields on WindUI instances
@@ -567,7 +616,7 @@ function NeoChat.Init(WindUI, Window, cfg)
                 AnchorPoint = Vector2.new(1, 0),
                 Position = UDim2.new(1, -2, 0, 1),
                 Size = UDim2.new(0, 14, 0, 14),
-                BackgroundColor3 = Color3.fromRGB(230, 60, 60),
+                BackgroundColor3 = P.own,
                 Visible = false, ZIndex = 5, Parent = b,
             }, { corner(7) })
             local bl = New("TextLabel", {
@@ -629,12 +678,14 @@ function NeoChat.Init(WindUI, Window, cfg)
     local pinBar = New("Frame", {
         Position = UDim2.new(0, 8, 0, HEADER),
         Size = UDim2.new(1, -16, 0, PIN_H),
+        BackgroundTransparency = 0.18,
         Bind = { BackgroundColor3 = "card" },
         Visible = false, Parent = root,
-    }, { corner(8) })
+    })
+    glass(pinBar, 8, 0.80)
     New("Frame", {
         Size = UDim2.new(0, 3, 1, -6), Position = UDim2.new(0, 4, 0, 3),
-        BackgroundColor3 = Color3.fromRGB(255, 200, 50), Parent = pinBar,
+        Bind = { BackgroundColor3 = "own" }, Parent = pinBar,
     }, { corner(2) })
     local pinText = New("TextLabel", {
         Position = UDim2.new(0, 12, 0, 0), Size = UDim2.new(1, -40, 1, 0),
@@ -656,9 +707,11 @@ function NeoChat.Init(WindUI, Window, cfg)
     local searchBar = New("Frame", {
         Position = UDim2.new(0, 8, 0, HEADER),
         Size = UDim2.new(1, -16, 0, SEARCH_H),
+        BackgroundTransparency = 0.18,
         Bind = { BackgroundColor3 = "card" },
         Visible = false, Parent = root,
-    }, { corner(8) })
+    })
+    glass(searchBar, 8, 0.80)
     local searchBox = New("TextBox", {
         Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -20, 1, 0),
         BackgroundTransparency = 1, PlaceholderText = "Search messages...",
@@ -689,11 +742,13 @@ function NeoChat.Init(WindUI, Window, cfg)
     -- Stickers / private / online panel
     local panel = New("Frame", {
         AnchorPoint = Vector2.new(0, 1),
-        Position = UDim2.new(0, 8, 1, -(INPUT_H)),
+        Position = UDim2.new(0, 8, 1, -(INPUT_H + SAFE_BOTTOM)),
         Size = UDim2.new(1, -16, 0, PANEL_H - 8),
+        BackgroundTransparency = 0.16,
         Bind = { BackgroundColor3 = "card" },
         Visible = false, ZIndex = 5, Parent = root,
-    }, { corner(12) })
+    })
+    glass(panel, 12, 0.76)
     local panelTitle = New("TextLabel", {
         Position = UDim2.new(0, 10, 0, 4), Size = UDim2.new(1, -40, 0, 18),
         BackgroundTransparency = 1, Text = "Stickers",
@@ -774,20 +829,22 @@ function NeoChat.Init(WindUI, Window, cfg)
 
     local replyBar = New("Frame", {
         AnchorPoint = Vector2.new(0, 1),
-        Position = UDim2.new(0, 8, 1, -(INPUT_H - 6)),
+        Position = UDim2.new(0, 8, 1, -(INPUT_H + SAFE_BOTTOM - 6)),
         Size = UDim2.new(1, -16, 0, REPLY_H),
+        BackgroundTransparency = 0.14,
         Bind = { BackgroundColor3 = "card" },
         Visible = false, ZIndex = 4, Parent = root,
-    }, { corner(10) })
+    })
+    glass(replyBar, 10, 0.76)
     New("Frame", {
         Size = UDim2.new(0, 3, 1, -8), Position = UDim2.new(0, 6, 0, 4),
-        BackgroundColor3 = Color3.fromRGB(0, 170, 255), Parent = replyBar,
+        Bind = { BackgroundColor3 = "own" }, Parent = replyBar,
     }, { corner(2) })
     local replyNameLbl = New("TextLabel", {
         Position = UDim2.new(0, 14, 0, 2), Size = UDim2.new(1, -44, 0, 13),
         BackgroundTransparency = 1, Text = "", TextSize = 11,
         Font = Enum.Font.GothamBold, TextXAlignment = Enum.TextXAlignment.Left,
-        TextColor3 = Color3.fromRGB(0, 170, 255), Parent = replyBar,
+        Bind = { TextColor3 = "own" }, Parent = replyBar,
     })
     local replyTextLbl = New("TextLabel", {
         Position = UDim2.new(0, 14, 0, 15), Size = UDim2.new(1, -44, 0, 13),
@@ -806,8 +863,9 @@ function NeoChat.Init(WindUI, Window, cfg)
     local QUICK_H = 32
     local quickReply = New("Frame", {
         AnchorPoint = Vector2.new(0, 1),
-        Position = UDim2.new(0, 8, 1, -(INPUT_H - 6 + REPLY_H)),
+        Position = UDim2.new(0, 8, 1, -(INPUT_H + SAFE_BOTTOM - 6 + REPLY_H)),
         Size = UDim2.new(1, -16, 0, QUICK_H),
+        BackgroundTransparency = 0.12,
         Bind = { BackgroundColor3 = "card" },
         Visible = false, ZIndex = 6, Parent = root,
     }, {
@@ -834,10 +892,12 @@ function NeoChat.Init(WindUI, Window, cfg)
 
     local inputRow = New("Frame", {
         AnchorPoint = Vector2.new(0, 1),
-        Position = UDim2.new(0, 8, 1, -4),
-        Size = UDim2.new(1, -16, 0, 34),
+        Position = UDim2.new(0, 8, 1, -SAFE_BOTTOM),
+        Size = UDim2.new(1, -16, 0, 36),
+        BackgroundTransparency = 0.10,
         Bind = { BackgroundColor3 = "card" }, Parent = root,
-    }, { corner(12) })
+    })
+    glass(inputRow, 12, 0.72)
 
     local sendBtn = New("TextButton", {
         AnchorPoint = Vector2.new(1, 0.5),
@@ -855,7 +915,7 @@ function NeoChat.Init(WindUI, Window, cfg)
 
     local openStickersPanel, openPrivatePanel, openOnlinePanel, sendInvite, doSend, send, setRoom, refreshPinBar
 
-    local stickerBtn = iconButton(inputRow, "sticker", "S", 6, 30, function()
+    local stickerBtn = iconButton(inputRow, "sticker", "", 6, 30, function()
         if S.panelOpen and panelTitle.Text == "Stickers" then
             S.panelOpen = false
         else
@@ -863,9 +923,9 @@ function NeoChat.Init(WindUI, Window, cfg)
         end
         relayout()
     end)
-    local inviteBtn = iconButton(inputRow, "send", "I", 38, 30, function() sendInvite() end)
+    local inviteBtn = iconButton(inputRow, "send", "", 38, 30, function() sendInvite() end)
 
-    searchToggleBtn = iconButton(utilBar, "search", "?", 0, 26, function()
+    searchToggleBtn = iconButton(utilBar, "search", "", 0, 26, function()
         Settings.SearchOpen = not Settings.SearchOpen
         if not Settings.SearchOpen then S.searchQuery = ""; searchBox.Text = "" end
         envGet().NeoChatSettings = Settings
@@ -879,11 +939,11 @@ function NeoChat.Init(WindUI, Window, cfg)
             end
         end
     end)
-    onlineBtn = iconButton(utilBar, "users", "O", 30, 26, function()
+    onlineBtn = iconButton(utilBar, "users", "", 30, 26, function()
         openOnlinePanel()
         relayout()
     end)
-    muteBtn = iconButton(utilBar, "bell-off", "M", 60, 26, function()
+    muteBtn = iconButton(utilBar, "bell-off", "", 60, 26, function()
         local muted = toggleMute()
         pcall(function()
             if WindUI and WindUI.Notify then
@@ -914,9 +974,9 @@ function NeoChat.Init(WindUI, Window, cfg)
         -- everything (reply / stickers panel / quick) sits ONLY above the input box
         local gap = 3
         local inputH = 36
-        inputRow.Position = UDim2.new(0, 8, 1, -4)
+        inputRow.Position = UDim2.new(0, 8, 1, -SAFE_BOTTOM)
         inputRow.Size = UDim2.new(1, -16, 0, inputH)
-        local yFromBottom = 4 + inputH -- top of input from bottom
+        local yFromBottom = SAFE_BOTTOM + inputH -- top of input from bottom
         if hasReply then
             replyBar.Visible = true
             replyBar.Position = UDim2.new(0, 8, 1, -(yFromBottom + gap + REPLY_H))
@@ -953,6 +1013,36 @@ function NeoChat.Init(WindUI, Window, cfg)
         relayout()
     end
 
+    local function reactionIconName(value)
+        for _, r in ipairs(REACT_SET) do
+            if r.value == value then return r.icon end
+        end
+        return "circle"
+    end
+
+    local function addReactionIcon(parent, reaction, order, size)
+        local b = New("TextButton", {
+            Size = UDim2.new(0, size or 30, 0, 28),
+            BackgroundTransparency = 0.18,
+            AutoButtonColor = false,
+            LayoutOrder = order or 1,
+            Text = "",
+            Bind = { BackgroundColor3 = "other" },
+            Parent = parent,
+        }, { corner(8) })
+        local asset = getIconImage(reaction.icon)
+        if asset then
+            local img = New("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+                Size = UDim2.new(0, 17, 0, 17), BackgroundTransparency = 1,
+                Image = asset, ScaleType = Enum.ScaleType.Fit, Parent = b,
+            })
+            pcall(function() img.ImageColor3 = P.text end)
+            painted[#painted + 1] = { img, "ImageColor3", "text" }
+        end
+        return b
+    end
+
     local function buildQuickReply(m)
         -- wipe old react / sticker buttons (keep layout + label)
         for _, c in ipairs(quickReply:GetChildren()) do
@@ -961,26 +1051,14 @@ function NeoChat.Init(WindUI, Window, cfg)
             end
         end
         -- reaction shortcuts
-        for i, emoji in ipairs(REACT_SET) do
-            local b = New("TextButton", {
-                Size = UDim2.new(0, 30, 0, 28),
-                BackgroundTransparency = 0.85,
-                Text = emoji,
-                TextSize = 16,
-                Font = Enum.Font.Gotham,
-                AutoButtonColor = false,
-                LayoutOrder = i,
-                Bind = { BackgroundColor3 = "other" },
-                Parent = quickReply,
-            }, { corner(8) })
+        for i, reaction in ipairs(REACT_SET) do
+            local b = addReactionIcon(quickReply, reaction, i, 30)
             b.MouseButton1Click:Connect(function()
                 if m and m._k then
                     task.spawn(function()
-                        call("PUT", urlFor("chat/" .. S.room .. "/messages/" .. tostring(m._k) .. "/reacts/" .. HttpService:UrlEncode(emoji)), encode(1))
+                        call("PUT", urlFor("chat/" .. S.room .. "/messages/" .. tostring(m._k) .. "/reacts/" .. HttpService:UrlEncode(reaction.value)), encode(1))
                     end)
                 end
-                -- also optional: send emoji as reply text
-                -- send(emoji)
                 clearReply()
             end)
         end
@@ -1183,8 +1261,18 @@ function NeoChat.Init(WindUI, Window, cfg)
             return b
         end
         chip("Reply", 1, function() setReply(m) end, 52)
-        for i, em in ipairs(REACT_SET) do
-            chip(em, 1 + i, function() addReact(m._k, em) end, 34)
+        for i, reaction in ipairs(REACT_SET) do
+            local b = chip("", 1 + i, function() addReact(m._k, reaction.value) end, 34)
+            local asset = getIconImage(reaction.icon)
+            if asset then
+                local img = New("ImageLabel", {
+                    AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+                    Size = UDim2.new(0, 17, 0, 17), BackgroundTransparency = 1,
+                    Image = asset, ScaleType = Enum.ScaleType.Fit, Parent = b,
+                })
+                painted[#painted + 1] = { img, "ImageColor3", "text" }
+                pcall(function() img.ImageColor3 = P.text end)
+            end
         end
         -- position wide bar under the bubble
         local rootPos = root.AbsolutePosition
@@ -1495,7 +1583,7 @@ function NeoChat.Init(WindUI, Window, cfg)
         local card = Instance.new("Frame")
         card.Size = UDim2.new(0, 220, 0, 0)
         card.AutomaticSize = Enum.AutomaticSize.Y
-        card.BackgroundColor3 = Color3.fromRGB(18, 18, 20)
+        card.BackgroundColor3 = P.card
         card.BackgroundTransparency = 0.38
         card.BorderSizePixel = 0
         card.Parent = sideContainer
@@ -1508,7 +1596,7 @@ function NeoChat.Init(WindUI, Window, cfg)
         nameL.Size = UDim2.new(1, 0, 0, 14)
         nameL.BackgroundTransparency = 1
         nameL.Text = cleanName(m.dn or m.user or "Someone")
-        nameL.TextColor3 = Color3.fromRGB(220, 220, 220)
+        nameL.TextColor3 = P.own
         nameL.TextSize = 12; nameL.Font = Enum.Font.GothamBold
         nameL.TextXAlignment = Enum.TextXAlignment.Left
         nameL.Parent = card
@@ -1519,7 +1607,7 @@ function NeoChat.Init(WindUI, Window, cfg)
         local preview = tostring(m.text or "")
         if parseSticker(preview) then preview = "[Sticker]" end
         msgL.Text = clipUtf8(preview, 68)
-        msgL.TextColor3 = Color3.fromRGB(155, 155, 160)
+        msgL.TextColor3 = P.text
         msgL.TextSize = 12; msgL.Font = Enum.Font.Gotham
         msgL.TextXAlignment = Enum.TextXAlignment.Left
         msgL.TextWrapped = true
@@ -1664,29 +1752,65 @@ function NeoChat.Init(WindUI, Window, cfg)
     -- message UI registry so reacts update under the bubble (never as chat messages)
     local msgUi = {}
     local function formatReacts(reacts)
-        local rtxt = {}
-        if type(reacts) ~= "table" then return "" end
-        for emoji, cnt in pairs(reacts) do
-            local n = tonumber(cnt) or 0
-            if n > 0 then rtxt[#rtxt + 1] = tostring(emoji) .. (n > 1 and ("×" .. n) or "") end
+        local n = 0
+        if type(reacts) ~= "table" then return 0 end
+        for _, cnt in pairs(reacts) do
+            if (tonumber(cnt) or 0) > 0 then n = n + 1 end
         end
-        table.sort(rtxt)
-        return table.concat(rtxt, "  ")
+        return n
     end
     local function applyReactsToUi(ui, reacts)
-        if not ui then return end
+        if not ui or not ui.reactChip then return end
         ui.reacts = reacts
-        local text = formatReacts(reacts)
-        if text == "" then
-            if ui.reactChip then ui.reactChip.Visible = false end
-            if ui.reactLabel then ui.reactLabel.Text = "" end
-            return
+        for _, child in ipairs(ui.reactChip:GetChildren()) do
+            if child:IsA("ImageLabel") or child:IsA("TextLabel") or child:IsA("Frame") then
+                child:Destroy()
+            end
         end
-        if ui.reactChip and ui.reactLabel then
-            ui.reactLabel.Text = text
-            ui.reactChip.Visible = true
+        local count = formatReacts(reacts)
+        ui.reactChip.Visible = count > 0
+        if count <= 0 then return end
+        local order = 0
+        for value, cnt in pairs(reacts) do
+            local n = tonumber(cnt) or 0
+            if n > 0 then
+                order = order + 1
+                local holder = New("Frame", {
+                    Size = UDim2.new(0, n > 1 and 40 or 22, 0, 20),
+                    BackgroundTransparency = 1,
+                    LayoutOrder = order,
+                    Parent = ui.reactChip,
+                })
+                local asset = getIconImage(reactionIconName(value))
+                if asset then
+                    New("ImageLabel", {
+                        AnchorPoint = Vector2.new(0, 0.5),
+                        Position = UDim2.new(0, 0, 0.5, 0),
+                        Size = UDim2.new(0, 16, 0, 16),
+                        BackgroundTransparency = 1,
+                        Image = asset,
+                        ScaleType = Enum.ScaleType.Fit,
+                        Bind = { ImageColor3 = "text" },
+                        Parent = holder,
+                    })
+                end
+                if n > 1 then
+                    New("TextLabel", {
+                        AnchorPoint = Vector2.new(0, 0.5),
+                        Position = UDim2.new(0, 19, 0.5, 0),
+                        Size = UDim2.new(0, 20, 0, 16),
+                        BackgroundTransparency = 1,
+                        Text = "×" .. tostring(n),
+                        TextSize = 10,
+                        Font = Enum.Font.GothamBold,
+                        Bind = { TextColor3 = "text" },
+                        Parent = holder,
+                    })
+                end
+            end
         end
     end
+
     function addReact(key, emoji)
         if not key then return end
         local ui = msgUi[tostring(key)]
@@ -1760,7 +1884,7 @@ function NeoChat.Init(WindUI, Window, cfg)
             corner(14), pad(11, 7, 11, 7),
             New("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 3) }),
             New("UIStroke", {
-                Color = own and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(120, 120, 140),
+                Color = own and P.ownText or P.text,
                 Transparency = own and 0.82 or 0.72,
                 Thickness = 1,
             }),
@@ -1774,16 +1898,16 @@ function NeoChat.Init(WindUI, Window, cfg)
             end
         end)
         if not own and mentionsMe(m.text) then
-            New("UIStroke", { Color = Color3.fromRGB(255, 196, 0), Thickness = 1.5, Transparency = 0.15, Parent = bubble })
+            New("UIStroke", { Color = P.own, Thickness = 1.5, Transparency = 0.15, Parent = bubble })
         end
         if not own and isReplyToMe(m) then
-            New("UIStroke", { Color = Color3.fromRGB(80, 180, 255), Thickness = 1.3, Transparency = 0.2, Parent = bubble })
+            New("UIStroke", { Color = P.own, Thickness = 1.3, Transparency = 0.2, Parent = bubble })
         end
 
         if m.reply and type(m.reply) == "table" then
             local qFrame = New("Frame", {
                 Size = UDim2.new(0, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.XY,
-                BackgroundColor3 = Color3.fromRGB(0, 0, 0), BackgroundTransparency = 0.72,
+                Bind = { BackgroundColor3 = "bg" }, BackgroundTransparency = 0.72,
                 LayoutOrder = 0, Parent = bubble,
             }, {
                 corner(5), pad(5, 3, 5, 3),
@@ -1793,7 +1917,7 @@ function NeoChat.Init(WindUI, Window, cfg)
                 Size = UDim2.new(0, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.XY,
                 BackgroundTransparency = 1, Text = cleanName(m.reply.dn or m.reply.user or "?"),
                 TextSize = 10, Font = Enum.Font.GothamBold,
-                TextColor3 = Color3.fromRGB(0, 170, 255), LayoutOrder = 1, Parent = qFrame,
+                Bind = { TextColor3 = "own" }, LayoutOrder = 1, Parent = qFrame,
             })
             local rt = tostring(m.reply.text or "")
             if rt:match("^%[%[STICKER:") then rt = "[Sticker]" end
@@ -1821,10 +1945,16 @@ function NeoChat.Init(WindUI, Window, cfg)
             props.Bind = { TextColor3 = own and "ownText" or "text" }
             return props
         end
+        local function themedNameColor(uid)
+            local base = P.own
+            local h, sat, val = base:ToHSV()
+            local shift = ((tonumber(uid) or 0) % 5 - 2) * 0.035
+            return Color3.fromHSV(h, math.clamp(sat + 0.05, 0, 1), math.clamp(val + shift, 0.45, 1))
+        end
 
         local uid = tonumber(m.uid) or 0
         if not own then
-            local col = Color3.fromHSV((uid % 97) / 97, 0.5, 1):ToHex()
+            local col = themedNameColor(uid):ToHex()
             local dn = cleanName(m.dn or m.user or "?")
             local un = cleanName(m.user or "")
             local who = (dn ~= un and un ~= "" and un ~= "?") and (esc(dn) .. ' <font transparency="0.5">@' .. esc(un) .. "</font>") or esc(dn)
@@ -1842,21 +1972,31 @@ function NeoChat.Init(WindUI, Window, cfg)
                     Padding = UDim.new(0, 4),
                 }),
             })
-            if Settings.ShowScriptIcon and m.scriptImg and m.scriptImg ~= "" then
-                New("ImageLabel", {
-                    Size = UDim2.new(0, 13, 0, 13), BackgroundTransparency = 1,
-                    Image = tostring(m.scriptImg), Parent = nameRow,
-                }, { corner(3) })
+            if Settings.ShowScriptIcon then
+                local scriptAsset = getIconImage("code-2")
+                if scriptAsset then
+                    local scriptIcon = New("ImageLabel", {
+                        Size = UDim2.new(0, 13, 0, 13), BackgroundTransparency = 1,
+                        Image = scriptAsset, ScaleType = Enum.ScaleType.Fit, Parent = nameRow,
+                    }, { corner(3) })
+                    pcall(function() scriptIcon.ImageColor3 = themedNameColor(uid) end)
+                end
             end
             if m.script and m.script ~= "" then
                 who = who .. '  <font transparency="0.45" size="10">[' .. esc(tostring(m.script)) .. "]</font>"
             end
-            New("TextLabel", {
+            local nameLabel = New("TextLabel", {
                 Size = UDim2.new(0, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.XY,
                 BackgroundTransparency = 1, RichText = true,
-                Text = '<font color="#' .. col .. '">' .. who .. "</font>",
+                Text = who,
                 TextSize = 11, Font = Enum.Font.GothamBold, Parent = nameRow,
             })
+            local function recolorName()
+                local themed = themedNameColor(uid):ToHex()
+                nameLabel.Text = '<font color="#' .. themed .. '">' .. who .. "</font>"
+            end
+            recolorName()
+            onTheme[#onTheme + 1] = recolorName
         end
 
         local frames, interval = parseSticker(m.text)
@@ -1885,7 +2025,7 @@ function NeoChat.Init(WindUI, Window, cfg)
                 Size = UDim2.new(0, 120, 0, 26), LayoutOrder = 6, TextSize = 12,
                 Font = Enum.Font.GothamBold, TextColor3 = Color3.new(1, 1, 1), Parent = bubble,
                 Text = here and "Here" or (expired and "Expired" or "Join"),
-                BackgroundColor3 = (here or expired) and Color3.fromRGB(70, 70, 74) or Color3.fromRGB(51, 199, 89),
+                BackgroundColor3 = (here or expired) and P.other or P.own,
             }, { corner(7) })
             if not here and not expired then
                 btn.MouseButton1Click:Connect(function()
@@ -1911,23 +2051,20 @@ function NeoChat.Init(WindUI, Window, cfg)
         do
             local chip = New("Frame", {
                 Size = UDim2.new(0, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.XY,
-                BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-                BackgroundTransparency = 0.4,
+                BackgroundTransparency = 0.12,
+                Bind = { BackgroundColor3 = "card" },
                 LayoutOrder = 8, Parent = bubble,
                 Visible = false,
             }, {
-                corner(10), pad(6, 2, 6, 2),
-            })
-            local rlab = New("TextLabel", {
-                Size = UDim2.new(0, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.XY,
-                BackgroundTransparency = 1,
-                Text = "",
-                TextSize = 12, Font = Enum.Font.Gotham,
-                TextColor3 = Color3.new(1, 1, 1),
-                Parent = chip,
+                corner(10), pad(5, 2, 5, 2),
+                New("UIListLayout", {
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    VerticalAlignment = Enum.VerticalAlignment.Center,
+                    Padding = UDim.new(0, 3),
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                }),
             })
             ui.reactChip = chip
-            ui.reactLabel = rlab
             ui.reacts = type(m.reacts) == "table" and m.reacts or {}
             applyReactsToUi(ui, ui.reacts)
         end
@@ -1984,17 +2121,17 @@ function NeoChat.Init(WindUI, Window, cfg)
             return b
         end
         if not frames then
-            iconAct("copy", "C", function()
+            iconAct("copy", "", function()
                 pcall(function()
                     if setclipboard then setclipboard(tostring(m.text or ""))
                     elseif toclipboard then toclipboard(tostring(m.text or "")) end
                 end)
             end)
         end
-        iconAct("reply", "R", function() setReply(m) end)
-        iconAct("heart", "H", function() addReact(m._k, "❤️") end)
+        iconAct("reply", "", function() setReply(m) end)
+        iconAct("heart", "", function() addReact(m._k, "❤️") end)
         if ME_IS_OWNER and m._k then
-            iconAct("trash-2", "X", function()
+            iconAct("trash-2", "", function()
                 deleteMessage(m._k)
                 pcall(function() row:Destroy() end)
             end)

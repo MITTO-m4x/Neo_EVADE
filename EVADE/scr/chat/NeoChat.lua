@@ -74,8 +74,15 @@ local ME_IS_OWNER = isOwner(LocalPlayer.Name)
 ------------------------------------------------------------------ Icons
 local IconsLib = nil
 pcall(function()
-    local fetch = game.HttpGetAsync or game.HttpGet
-    local raw = fetch(game, "https://raw.githubusercontent.com/Footagesus/Icons/main/Main-v2.lua")
+    local url = "https://raw.githubusercontent.com/Footagesus/Icons/main/Main-v2.lua"
+    local raw
+    local okA, rA = pcall(function() return game:HttpGet(url) end)
+    if okA and type(rA) == "string" then raw = rA
+    else
+        local okB, rB = pcall(function() return game:HttpGetAsync(url) end)
+        if okB and type(rB) == "string" then raw = rB end
+    end
+    if not raw or type(loadstring) ~= "function" then return end
     IconsLib = loadstring(raw)()
     if IconsLib and IconsLib.SetIconsType then pcall(function() IconsLib.SetIconsType("lucide") end) end
 end)
@@ -97,8 +104,9 @@ local function getIconImage(name)
 end
 
 ------------------------------------------------------------------ HTTP
-local rawRequest = (syn and syn.request) or (http and http.request) or http_request
-    or (fluxus and fluxus.request) or request
+local rawRequest = (type(syn) == "table" and syn.request) or (type(http) == "table" and http.request)
+    or http_request or (type(fluxus) == "table" and fluxus.request) or request
+if type(rawRequest) ~= "function" then rawRequest = nil end
 local JSON_HEADERS = { ["Content-Type"] = "application/json" }
 
 local function call(method, url, body)
@@ -121,10 +129,13 @@ end
 local function encode(t) return HttpService:JSONEncode(t) end
 local function esc(s)
     s = tostring(s or "")
-    return s:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
+    s = s:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
+    return s
 end
 local function trim(s) return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", "")) end
 local function clipUtf8(s, max)
+    s = tostring(s or "")
+    if not (utf8 and utf8.len and utf8.offset) then return s:sub(1, max) end
     local len = utf8.len(s)
     if not len then return s:sub(1, max) end
     if len <= max then return s end
@@ -144,7 +155,7 @@ local StickerCatalog = { Order = {}, Stickers = {}, Ready = false }
 local function loadStickers(url)
     task.spawn(function()
         local ok, raw = pcall(function() return game:HttpGet(url or NeoChat.StickersURL, true) end)
-        if not ok or type(raw) ~= "string" then return end
+        if not ok or type(raw) ~= "string" or type(loadstring) ~= "function" then return end
         local ok2, data = pcall(function() return loadstring(raw)() end)
         if not ok2 or type(data) ~= "table" then return end
         StickerCatalog.Order = data.Order or {}
@@ -490,17 +501,17 @@ function NeoChat.Init(WindUI, Window, cfg)
         Name = "NeoChat", Size = UDim2.fromScale(1, 1),
         BackgroundTransparency = 1, Parent = canvas,
     })
-    local chatScale = tonumber(Settings.ChatScale) or tonumber(getgenv().NeoChatScale) or 1.08
+    local chatScale = tonumber(Settings.ChatScale) or tonumber(envGet().NeoChatScale) or 1.08
     local rootScale = New("UIScale", { Scale = chatScale, Parent = root })
     local function applyChatScale(sc)
         sc = math.clamp(tonumber(sc) or 1.08, 0.7, 1.5)
         Settings.ChatScale = sc
-        getgenv().NeoChatScale = sc
+        envGet().NeoChatScale = sc
         rootScale.Scale = sc
         pcall(persistSettings, Settings)
         pcall(function() if relayout then relayout() end end)
     end
-    getgenv().NeoChatSetScale = applyChatScale
+    envGet().NeoChatSetScale = applyChatScale
 
     local title = New("TextLabel", {
         Position = UDim2.new(0, 12, 0, 0), Size = UDim2.new(0.42, 0, 0, HEADER),
@@ -1442,7 +1453,10 @@ function NeoChat.Init(WindUI, Window, cfg)
         if sideGui and sideGui.Parent then return end
         local parent = nil
         pcall(function() if gethui then parent = gethui() end end)
-        if not parent then parent = game:GetService("CoreGui") end
+        if not parent then
+            local okCG, cg = pcall(function() return game:GetService("CoreGui") end)
+            parent = (okCG and cg) or LocalPlayer:WaitForChild("PlayerGui")
+        end
         sideGui = Instance.new("ScreenGui")
         sideGui.Name = "NeoChatSideNotifs"
         sideGui.IgnoreGuiInset = true

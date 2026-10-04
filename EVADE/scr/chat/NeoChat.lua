@@ -1,6 +1,19 @@
+--[[
+    NeoChat v3.3.0  —  Firebase chat for WindUI  (Neo Hyper)
+    Full feature pack:
+    - All Yin stickers + favorites strip
+    - Image-only sticker display (never shows [[STICKER]] text)
+    - Icon actions + long-press menu + double-tap react
+    - Pinned message (owners) | Search | Mute room
+    - Online list | Recent DMs | Unread private badge
+    - Compact mode | Chat accent theme
+    - Profile peek | Friend request nudge
+    - Owners: v_orc, n_oqv
+]]
+
 local NeoChat = {
     DatabaseURL = "https://neohyper-9a843-default-rtdb.europe-west1.firebasedatabase.app",
-    Version = "3.3.2",
+    Version = "3.3.3",
     StickersURL = "https://raw.githubusercontent.com/Sephtis32/Yin-stickers/refs/heads/main/YinYang_Stickers.lua",
 }
 
@@ -477,6 +490,17 @@ function NeoChat.Init(WindUI, Window, cfg)
         Name = "NeoChat", Size = UDim2.fromScale(1, 1),
         BackgroundTransparency = 1, Parent = canvas,
     })
+    local chatScale = tonumber(Settings.ChatScale) or tonumber(getgenv().NeoChatScale) or 1.08
+    local rootScale = New("UIScale", { Scale = chatScale, Parent = root })
+    local function applyChatScale(sc)
+        sc = math.clamp(tonumber(sc) or 1.08, 0.7, 1.5)
+        Settings.ChatScale = sc
+        getgenv().NeoChatScale = sc
+        rootScale.Scale = sc
+        pcall(persistSettings, Settings)
+        pcall(function() if relayout then relayout() end end)
+    end
+    getgenv().NeoChatSetScale = applyChatScale
 
     local title = New("TextLabel", {
         Position = UDim2.new(0, 12, 0, 0), Size = UDim2.new(0.42, 0, 0, HEADER),
@@ -863,31 +887,39 @@ function NeoChat.Init(WindUI, Window, cfg)
         end
         local hasReply = S.replyTo ~= nil
         local hasQuick = hasReply and quickReply.Visible
-        -- tight stack from bottom: input → reply → quick → panel
-        local gap = 2
-        local inputH = 38
-        local bottom = inputH + gap
-        if hasReply then bottom = bottom + REPLY_H + gap end
-        if hasQuick then bottom = bottom + QUICK_H + gap end
-        if S.panelOpen then bottom = bottom + PANEL_H + gap end
-        scroll.Position = UDim2.new(0, 0, 0, HEADER + extraTop)
-        scroll.Size = UDim2.new(1, 0, 1, -(HEADER + extraTop + bottom))
-        panel.Visible = S.panelOpen
-        replyBar.Visible = hasReply
-        privHeader.Visible = S.kind == "private"
+        -- everything (reply / stickers panel / quick) sits ONLY above the input box
+        local gap = 3
+        local inputH = 36
         inputRow.Position = UDim2.new(0, 8, 1, -4)
-        local y = inputH + 4
+        inputRow.Size = UDim2.new(1, -16, 0, inputH)
+        local yFromBottom = 4 + inputH -- top of input from bottom
         if hasReply then
-            replyBar.Position = UDim2.new(0, 8, 1, -(y + REPLY_H))
-            y = y + REPLY_H + gap
+            replyBar.Visible = true
+            replyBar.Position = UDim2.new(0, 8, 1, -(yFromBottom + gap + REPLY_H))
+            yFromBottom = yFromBottom + gap + REPLY_H
+        else
+            replyBar.Visible = false
         end
         if hasQuick then
-            quickReply.Position = UDim2.new(0, 8, 1, -(y + QUICK_H))
-            y = y + QUICK_H + gap
+            quickReply.Visible = true
+            quickReply.Position = UDim2.new(0, 8, 1, -(yFromBottom + gap + QUICK_H))
+            yFromBottom = yFromBottom + gap + QUICK_H
+        else
+            quickReply.Visible = false
         end
         if S.panelOpen then
-            panel.Position = UDim2.new(0, 8, 1, -(y + PANEL_H - 8))
+            panel.Visible = true
+            panel.Position = UDim2.new(0, 8, 1, -(yFromBottom + gap + PANEL_H - 8))
+            panel.Size = UDim2.new(1, -16, 0, PANEL_H - 8)
+            yFromBottom = yFromBottom + gap + PANEL_H - 8
+        else
+            panel.Visible = false
         end
+        local bottom = yFromBottom + 4
+        scroll.Position = UDim2.new(0, 0, 0, HEADER + extraTop)
+        scroll.Size = UDim2.new(1, 0, 1, -(HEADER + extraTop + bottom))
+        privHeader.Visible = S.kind == "private"
+    end
     end
 
     local function clearReply()
@@ -2384,6 +2416,9 @@ function NeoChat.Init(WindUI, Window, cfg)
     function Chat:SendInvite() return sendInvite() end
     function Chat:SetRoom(kind, targetUid, targetName) return setRoom(kind, targetUid, targetName) end
     function Chat:Unread() return unreadCount() end
+    function Chat:SetScale(sc)
+        if applyChatScale then applyChatScale(sc) end
+    end
     function Chat:SetSideNotifs(on)
         Settings.SideNotifs = on == true; envGet().NeoChatSettings = Settings
     end

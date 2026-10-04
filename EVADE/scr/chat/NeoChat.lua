@@ -73,6 +73,7 @@ local ME_IS_OWNER = isOwner(LocalPlayer.Name)
 
 ------------------------------------------------------------------ Icons
 local IconsLib = nil
+local IconProvider = nil
 pcall(function()
     local url = "https://raw.githubusercontent.com/Footagesus/Icons/main/Main-v2.lua"
     local raw
@@ -82,27 +83,61 @@ pcall(function()
         local okB, rB = pcall(function() return game:HttpGetAsync(url) end)
         if okB and type(rB) == "string" then raw = rB end
     end
-    if not raw or type(loadstring) ~= "function" then return end
-    IconsLib = loadstring(raw)()
-    if IconsLib and IconsLib.SetIconsType then pcall(function() IconsLib.SetIconsType("lucide") end) end
+    if raw and type(loadstring) == "function" then
+        local ok, lib = pcall(loadstring(raw))
+        if ok and type(lib) == "table" then
+            IconsLib = lib
+            if IconsLib.SetIconsType then pcall(function() IconsLib.SetIconsType("lucide") end) end
+        end
+    end
 end)
-local function getIconImage(name)
-    if not IconsLib or not name then return nil end
-    local ok, img = pcall(function()
-        if type(IconsLib.Icon) == "function" then
-            return IconsLib.Icon(name)
+
+-- WindUI already loads the official Footagesus Icons module. Prefer that
+-- instance when available; this also avoids loading a second incompatible
+-- copy of the icon registry in some WindUI forks.
+local function attachWindIcons(WindUI)
+    if not WindUI then return end
+    local ok, icons = pcall(function() return WindUI.Icons end)
+    if ok and type(icons) == "table" then IconProvider = icons end
+    if type(WindUI.Icon) == "function" then IconProvider = WindUI end
+end
+
+local function getIconData(name)
+    if not name then return nil end
+    local providers = { IconProvider, IconsLib }
+    for _, provider in ipairs(providers) do
+        if provider and type(provider.Icon) == "function" then
+            local ok, value = pcall(function() return provider.Icon(name) end)
+            if not ok then
+                ok, value = pcall(function() return provider:Icon(name) end)
+            end
+            if ok and value ~= nil then
+                if type(value) == "string" then
+                    return { Image = value }
+                elseif type(value) == "table" and type(value[1]) == "string" then
+                    local meta = type(value[2]) == "table" and value[2] or nil
+                    return {
+                        Image = value[1],
+                        ImageRectSize = meta and meta.ImageRectSize or nil,
+                        ImageRectOffset = meta and (meta.ImageRectPosition or meta.ImageRectOffset) or nil,
+                        Parts = meta and meta.Parts or nil,
+                    }
+                end
+            end
         end
-        if type(IconsLib.GetIcon) == "function" then
-            return IconsLib.GetIcon(name)
-        end
-        if type(IconsLib) == "table" and type(IconsLib[name]) == "string" then
-            return IconsLib[name]
-        end
-        return nil
-    end)
-    if ok and type(img) == "string" and img ~= "" then return img end
+    end
     return nil
 end
+
+local function applyIcon(img, data)
+    if not img or not data then return false end
+    if type(data.Image) ~= "string" or data.Image == "" then return false end
+    img.Image = data.Image
+    if data.ImageRectSize then img.ImageRectSize = data.ImageRectSize end
+    if data.ImageRectOffset then img.ImageRectOffset = data.ImageRectOffset end
+    return true
+end
+
 
 ------------------------------------------------------------------ HTTP
 local rawRequest = (type(syn) == "table" and syn.request) or (type(http) == "table" and http.request)
@@ -266,6 +301,7 @@ local ACCENTS = {
 
 ------------------------------------------------------------------ Init
 function NeoChat.Init(WindUI, Window, cfg)
+    attachWindIcons(WindUI)
     cfg = cfg or {}
     cfg.DatabaseURL = cfg.DatabaseURL or NeoChat.DatabaseURL
     assert(type(cfg.DatabaseURL) == "string", "NeoChat: DatabaseURL is required")
@@ -479,18 +515,24 @@ function NeoChat.Init(WindUI, Window, cfg)
             Text = "", BackgroundTransparency = 1,
             AutoButtonColor = false, Parent = parent,
         })
-        local asset = getIconImage(iconName)
+        local asset = getIconData(iconName)
         if asset then
             local img = New("ImageLabel", {
                 AnchorPoint = Vector2.new(0.5, 0.5),
                 Position = UDim2.fromScale(0.5, 0.5),
                 Size = UDim2.new(0, size - 10, 0, size - 10),
-                BackgroundTransparency = 1, Image = asset,
+                BackgroundTransparency = 1,
                 ScaleType = Enum.ScaleType.Fit, Parent = btn,
             })
-            pcall(function() img.ImageColor3 = P.text end)
-            painted[#painted + 1] = { img, "ImageColor3", "text" }
-        else
+            if applyIcon(img, asset) then
+                pcall(function() img.ImageColor3 = P.text end)
+                painted[#painted + 1] = { img, "ImageColor3", "text" }
+            else
+                img:Destroy()
+                asset = nil
+            end
+        end
+        if not asset then
             New("TextLabel", {
                 Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
                 Text = fallbackLetter or "?", TextSize = 13, Font = Enum.Font.GothamBold,
@@ -559,12 +601,12 @@ function NeoChat.Init(WindUI, Window, cfg)
     local relayout, addReact -- forward declared (used by callbacks defined earlier than their bodies)
     local root = New("Frame", {
         Name = "NeoChat", Size = UDim2.fromScale(1, 1),
-        BackgroundTransparency = 1, Parent = canvas,
+        BackgroundTransparency = 1, ClipsDescendants = true, Parent = canvas,
     })
-    local chatScale = tonumber(Settings.ChatScale) or tonumber(envGet().NeoChatScale) or 1.0
+    local chatScale = math.min(tonumber(Settings.ChatScale) or tonumber(envGet().NeoChatScale) or 1.0, 1.0)
     local rootScale = New("UIScale", { Scale = chatScale, Parent = root })
     local function applyChatScale(sc)
-        sc = math.clamp(tonumber(sc) or 1.0, 0.75, 1.15)
+        sc = math.clamp(tonumber(sc) or 1.0, 0.75, 1.0)
         Settings.ChatScale = sc
         envGet().NeoChatScale = sc
         rootScale.Scale = sc
@@ -720,15 +762,16 @@ function NeoChat.Init(WindUI, Window, cfg)
         Bind = { TextColor3 = "text", PlaceholderColor3 = "placeholder" }, Parent = searchBar,
     })
 
+    local scrollPad = pad(10, 6, 10, 6)
     local scroll = New("ScrollingFrame", {
         Position = UDim2.new(0, 0, 0, HEADER),
         Size = UDim2.new(1, 0, 1, -(HEADER + INPUT_H)),
         BackgroundTransparency = 1, BorderSizePixel = 0,
-        ScrollBarThickness = 3, CanvasSize = UDim2.new(),
+        ScrollBarThickness = 3, ClipsDescendants = true, CanvasSize = UDim2.new(),
         AutomaticCanvasSize = Enum.AutomaticSize.Y, Parent = root,
     }, {
         New("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 7) }),
-        pad(10, 6, 10, 6),
+        scrollPad,
     })
 
     local emptyLbl = New("TextLabel", {
@@ -999,11 +1042,19 @@ function NeoChat.Init(WindUI, Window, cfg)
         else
             panel.Visible = false
         end
-        local bottom = yFromBottom + 4
+        local bottom = yFromBottom + 12
         scroll.Position = UDim2.new(0, 0, 0, HEADER + extraTop)
-        scroll.Size = UDim2.new(1, 0, 1, -(HEADER + extraTop + bottom))
+        local rootH = root.AbsoluteSize.Y
+        if rootH <= 0 then rootH = 420 end
+        local viewportH = math.max(70, rootH - (HEADER + extraTop + bottom))
+        scroll.Size = UDim2.new(1, 0, 0, viewportH)
+        scrollPad.PaddingBottom = UDim.new(0, math.max(10, bottom))
         privHeader.Visible = S.kind == "private"
     end
+
+    root:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+        pcall(function() relayout() end)
+    end)
 
     local function clearReply()
         S.replyTo = nil
@@ -1030,15 +1081,17 @@ function NeoChat.Init(WindUI, Window, cfg)
             Bind = { BackgroundColor3 = "other" },
             Parent = parent,
         }, { corner(8) })
-        local asset = getIconImage(reaction.icon)
+        local asset = getIconData(reaction.icon)
         if asset then
             local img = New("ImageLabel", {
                 AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
                 Size = UDim2.new(0, 17, 0, 17), BackgroundTransparency = 1,
-                Image = asset, ScaleType = Enum.ScaleType.Fit, Parent = b,
+                ScaleType = Enum.ScaleType.Fit, Parent = b,
             })
-            pcall(function() img.ImageColor3 = P.text end)
-            painted[#painted + 1] = { img, "ImageColor3", "text" }
+            if applyIcon(img, asset) then
+                pcall(function() img.ImageColor3 = P.text end)
+                painted[#painted + 1] = { img, "ImageColor3", "text" }
+            else img:Destroy() end
         end
         return b
     end
@@ -1263,15 +1316,17 @@ function NeoChat.Init(WindUI, Window, cfg)
         chip("Reply", 1, function() setReply(m) end, 52)
         for i, reaction in ipairs(REACT_SET) do
             local b = chip("", 1 + i, function() addReact(m._k, reaction.value) end, 34)
-            local asset = getIconImage(reaction.icon)
+            local asset = getIconData(reaction.icon)
             if asset then
                 local img = New("ImageLabel", {
                     AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
                     Size = UDim2.new(0, 17, 0, 17), BackgroundTransparency = 1,
-                    Image = asset, ScaleType = Enum.ScaleType.Fit, Parent = b,
+                    ScaleType = Enum.ScaleType.Fit, Parent = b,
                 })
-                painted[#painted + 1] = { img, "ImageColor3", "text" }
-                pcall(function() img.ImageColor3 = P.text end)
+                if applyIcon(img, asset) then
+                    painted[#painted + 1] = { img, "ImageColor3", "text" }
+                    pcall(function() img.ImageColor3 = P.text end)
+                else img:Destroy() end
             end
         end
         -- position wide bar under the bubble
@@ -1781,18 +1836,18 @@ function NeoChat.Init(WindUI, Window, cfg)
                     LayoutOrder = order,
                     Parent = ui.reactChip,
                 })
-                local asset = getIconImage(reactionIconName(value))
+                local asset = getIconData(reactionIconName(value))
                 if asset then
-                    New("ImageLabel", {
+                    local img = New("ImageLabel", {
                         AnchorPoint = Vector2.new(0, 0.5),
                         Position = UDim2.new(0, 0, 0.5, 0),
                         Size = UDim2.new(0, 16, 0, 16),
                         BackgroundTransparency = 1,
-                        Image = asset,
                         ScaleType = Enum.ScaleType.Fit,
                         Bind = { ImageColor3 = "text" },
                         Parent = holder,
                     })
+                    if not applyIcon(img, asset) then img:Destroy() end
                 end
                 if n > 1 then
                     New("TextLabel", {
@@ -1973,13 +2028,15 @@ function NeoChat.Init(WindUI, Window, cfg)
                 }),
             })
             if Settings.ShowScriptIcon then
-                local scriptAsset = getIconImage("code-2")
+                local scriptAsset = getIconData("code-2")
                 if scriptAsset then
                     local scriptIcon = New("ImageLabel", {
                         Size = UDim2.new(0, 13, 0, 13), BackgroundTransparency = 1,
-                        Image = scriptAsset, ScaleType = Enum.ScaleType.Fit, Parent = nameRow,
+                        ScaleType = Enum.ScaleType.Fit, Parent = nameRow,
                     }, { corner(3) })
-                    pcall(function() scriptIcon.ImageColor3 = themedNameColor(uid) end)
+                    if applyIcon(scriptIcon, scriptAsset) then
+                        pcall(function() scriptIcon.ImageColor3 = themedNameColor(uid) end)
+                    else scriptIcon:Destroy() end
                 end
             end
             if m.script and m.script ~= "" then
@@ -2095,16 +2152,22 @@ function NeoChat.Init(WindUI, Window, cfg)
                 Bind = { BackgroundColor3 = own and "ownText" or "text" },
                 Text = "", AutoButtonColor = false, Parent = timeRow,
             }, { corner(7) })
-            local asset = getIconImage(iconName)
+            local asset = getIconData(iconName)
             if asset then
                 local img = New("ImageLabel", {
                     AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
                     Size = UDim2.new(0, 14, 0, 14), BackgroundTransparency = 1,
-                    Image = asset, ScaleType = Enum.ScaleType.Fit, Parent = b,
+                    ScaleType = Enum.ScaleType.Fit, Parent = b,
                 })
-                pcall(function() img.ImageColor3 = own and P.ownText or P.text end)
-                img.ImageTransparency = 0.12
-            else
+                if applyIcon(img, asset) then
+                    pcall(function() img.ImageColor3 = own and P.ownText or P.text end)
+                    img.ImageTransparency = 0.12
+                else
+                    img:Destroy()
+                    asset = nil
+                end
+            end
+            if not asset then
                 New("TextLabel", {
                     Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1,
                     Text = fallback, TextSize = 11, Font = Enum.Font.GothamBold,

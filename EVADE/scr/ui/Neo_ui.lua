@@ -15565,9 +15565,9 @@ function aa.InstallEnhancementPack(self, Window, Config)
         Danger = Pack.DangerColor or Color3.fromRGB(255, 69, 58),
         Warning = Pack.WarningColor or Color3.fromRGB(255, 204, 0),
         Glow = Pack.GlowColor, -- nil = use Accent
-        GlowTransparency = Pack.GlowTransparency or 0.55,
-        GlowSpread = Pack.GlowSpread or 36,
-        GlowIntensity = Pack.GlowIntensity or 1,
+        GlowTransparency = Pack.GlowTransparency or 0.42,
+        GlowSpread = Pack.GlowSpread or 28,
+        GlowIntensity = Pack.GlowIntensity or 1.15,
     }
 
     local Shapes = {
@@ -16116,180 +16116,218 @@ function aa.InstallEnhancementPack(self, Window, Config)
     end
 
     ------------------------------------------------------------------
-    -- 3.5) WINDOW GLOW (توهج / نور خفيف حوالين الواجهة)
+    -- 3.5) WINDOW GLOW (توهج ناعم زي PoopHub — هالة ملونة حوالين الإطار)
     ------------------------------------------------------------------
     local GlowAPI = {}
     local glowLayers = {}
     local glowRoot
     local glowPulseConn
+    local glowState = {
+        color = nil,
+        spread = 28,
+        intensity = 1.15,
+        transparency = 0.42,
+        enabled = true,
+    }
 
     if Features.Glow then
-        local spread = Colors.GlowSpread or 36
-        local baseColor = Colors.Glow or Colors.Accent
-        local intensity = math.clamp(tonumber(Colors.GlowIntensity) or 1, 0.1, 3)
-        local baseT = math.clamp(tonumber(Colors.GlowTransparency) or 0.55, 0.05, 0.95)
+        -- نفس أسلوب الـ soft outer bloom: صورة ظل Slice ملونة + طبقات متدرجة
+        local GLOW_ASSET = "rbxassetid://8992230677" -- soft rect glow / shadow
+        local winCorner = (Window.UICorner or Window.Radius or 16)
 
-        -- يتثبت ورا محتوى النافذة ويتبع حجمها
+        glowState.color = Colors.Glow or Colors.Accent or Color3.fromRGB(140, 100, 255)
+        glowState.spread = tonumber(Colors.GlowSpread) or tonumber(Pack.GlowSpread) or 28
+        glowState.intensity = math.clamp(tonumber(Colors.GlowIntensity) or tonumber(Pack.GlowIntensity) or 1.15, 0.2, 3)
+        glowState.transparency = math.clamp(tonumber(Colors.GlowTransparency) or tonumber(Pack.GlowTransparency) or 0.42, 0.05, 0.9)
+
+        -- لازم يكون parent على الإطار الخارجي للنافذة ويتبع حجمها
         glowRoot = mk("Frame", {
             Name = "WindowGlowRoot",
             BackgroundTransparency = 1,
-            Size = UDim2.new(1, spread * 2, 1, spread * 2),
+            Size = UDim2.new(1, 0, 1, 0),
             Position = UDim2.fromScale(0.5, 0.5),
             AnchorPoint = Vector2.new(0.5, 0.5),
-            ZIndex = -50,
+            ZIndex = -80,
             BorderSizePixel = 0,
+            ClipsDescendants = false,
         }, gui)
 
-        -- طبقات توهج متدرجة (من برّه لجوه) = إحساس نور ناعم
-        local layerDefs = {
-            {pad = spread,       t = baseT + 0.25, z = -5},
-            {pad = spread * 0.7, t = baseT + 0.10, z = -4},
-            {pad = spread * 0.4, t = baseT - 0.05, z = -3},
-            {pad = spread * 0.2, t = math.max(0.15, baseT - 0.20), z = -2},
+        -- طبقات التوهج: كل طبقة أكبر شوية وأشفّ → هالة ناعمة برّه الحدود
+        -- (مش مربعات معتمة — صورة ظل Slice زي الـ UI الحديث)
+        local layerSpecs = {
+            -- padScale, imageTransparency base, sizeExtra multiplier
+            { pad = 1.00, t = 0.72, name = "GlowOuter" },
+            { pad = 0.70, t = 0.55, name = "GlowMid" },
+            { pad = 0.42, t = 0.38, name = "GlowInner" },
+            { pad = 0.22, t = 0.28, name = "GlowCore" },
         }
 
-        local function makeLayer(def)
-            local pad = def.pad
-            local t = math.clamp(def.t / intensity, 0.05, 0.98)
-            local f = mk("Frame", {
-                Name = "GlowLayer",
-                BackgroundColor3 = baseColor,
-                BackgroundTransparency = t,
-                Size = UDim2.new(1, 0, 1, 0),
-                Position = UDim2.fromScale(0.5, 0.5),
-                AnchorPoint = Vector2.new(0.5, 0.5),
-                BorderSizePixel = 0,
-                ZIndex = def.z,
-            }, glowRoot)
-            -- تكبير الطبقة حسب الـ pad
-            f.Size = UDim2.new(1, -math.max(0, (spread * 2) - pad * 2), 1, -math.max(0, (spread * 2) - pad * 2))
-            corner(f, (Window.UICorner or Window.Radius or 16) + math.floor(pad * 0.35))
-            -- حد ناعم إضافي
-            stroke(f, baseColor, math.clamp(t + 0.15, 0.2, 0.95), math.max(1, math.floor(pad * 0.08)))
-            -- صورة توهج ناعمة (shadow/glow slice) لو متاحة
-            local img = mk("ImageLabel", {
-                Name = "GlowImage",
-                BackgroundTransparency = 1,
-                Image = "rbxassetid://8992230677",
-                ImageColor3 = baseColor,
-                ImageTransparency = math.clamp(t * 0.85, 0.2, 0.92),
-                ScaleType = Enum.ScaleType.Slice,
-                SliceCenter = Rect.new(99, 99, 99, 99),
-                Size = UDim2.new(1, pad, 1, pad),
-                Position = UDim2.fromScale(0.5, 0.5),
-                AnchorPoint = Vector2.new(0.5, 0.5),
-                ZIndex = def.z - 1,
-            }, glowRoot)
-            table.insert(glowLayers, {frame = f, image = img, baseT = t, pad = pad})
-            return f
-        end
-
-        for _, def in ipairs(layerDefs) do
-            makeLayer(def)
-        end
-
-        local function applyColor(c)
-            if typeof(c) ~= "Color3" then return end
+        local function rebuildLayers()
             for _, L in ipairs(glowLayers) do
-                L.frame.BackgroundColor3 = c
-                local s = L.frame:FindFirstChildOfClass("UIStroke")
-                if s then s.Color = c end
-                if L.image then L.image.ImageColor3 = c end
+                pcall(function() L:Destroy() end)
+            end
+            table.clear(glowLayers)
+
+            local spread = glowState.spread
+            local color = glowState.color
+            local inv = glowState.intensity
+            local baseT = glowState.transparency
+
+            for _, spec in ipairs(layerSpecs) do
+                local pad = math.floor(spread * spec.pad)
+                -- شفافية نهائية: أساس الطبقة + إعداد المستخدم / الشدة
+                local imgT = math.clamp((spec.t + baseT * 0.35) / inv, 0.08, 0.92)
+
+                local img = mk("ImageLabel", {
+                    Name = spec.name,
+                    BackgroundTransparency = 1,
+                    Image = GLOW_ASSET,
+                    ImageColor3 = color,
+                    ImageTransparency = imgT,
+                    ScaleType = Enum.ScaleType.Slice,
+                    SliceCenter = Rect.new(99, 99, 99, 99),
+                    Size = UDim2.new(1, pad * 2, 1, pad * 2),
+                    Position = UDim2.fromScale(0.5, 0.5),
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    ZIndex = -70,
+                    BorderSizePixel = 0,
+                }, glowRoot)
+
+                -- طبقة لون ناعمة جداً تحت الصورة (تدي عمق للهالة)
+                local soft = mk("Frame", {
+                    Name = spec.name .. "_Soft",
+                    BackgroundColor3 = color,
+                    BackgroundTransparency = math.clamp(imgT + 0.18, 0.35, 0.96),
+                    Size = UDim2.new(1, pad * 1.15, 1, pad * 1.15),
+                    Position = UDim2.fromScale(0.5, 0.5),
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    BorderSizePixel = 0,
+                    ZIndex = -71,
+                }, glowRoot)
+                corner(soft, winCorner + math.floor(pad * 0.45))
+
+                table.insert(glowLayers, img)
+                table.insert(glowLayers, soft)
             end
         end
 
-        local function applyIntensity(inv)
-            intensity = math.clamp(tonumber(inv) or 1, 0.1, 3)
-            for _, L in ipairs(glowLayers) do
-                local t = math.clamp(L.baseT / intensity, 0.05, 0.98)
-                L.frame.BackgroundTransparency = t
-                if L.image then L.image.ImageTransparency = math.clamp(t * 0.85, 0.2, 0.92) end
-            end
-        end
+        rebuildLayers()
 
-        local function applySpread(sp)
-            spread = math.clamp(tonumber(sp) or 36, 8, 120)
-            glowRoot.Size = UDim2.new(1, spread * 2, 1, spread * 2)
-            for i, L in ipairs(glowLayers) do
-                local factor = ({1, 0.7, 0.4, 0.2})[i] or 0.3
-                local pad = spread * factor
-                L.pad = pad
-                L.frame.Size = UDim2.new(1, -math.max(0, (spread * 2) - pad * 2), 1, -math.max(0, (spread * 2) - pad * 2))
-                local cr = L.frame:FindFirstChildOfClass("UICorner")
-                if cr then cr.CornerRadius = UDim.new(0, (Window.UICorner or Window.Radius or 16) + math.floor(pad * 0.35)) end
-                if L.image then
-                    L.image.Size = UDim2.new(1, pad, 1, pad)
-                end
-            end
+        local function applyVisible()
+            if glowRoot then glowRoot.Visible = glowState.enabled end
         end
 
         function GlowAPI.SetEnabled(v)
-            if glowRoot then glowRoot.Visible = v and true or false end
+            glowState.enabled = v and true or false
+            applyVisible()
         end
+
         function GlowAPI.SetColor(c)
-            applyColor(c)
-            if typeof(c) == "Color3" then Colors.Glow = c end
-        end
-        function GlowAPI.SetIntensity(v)
-            applyIntensity(v)
-            Colors.GlowIntensity = intensity
-        end
-        function GlowAPI.SetTransparency(v)
-            local nt = math.clamp(tonumber(v) or 0.55, 0.05, 0.95)
-            Colors.GlowTransparency = nt
-            for i, L in ipairs(glowLayers) do
-                local add = ({0.25, 0.10, -0.05, -0.20})[i] or 0
-                L.baseT = math.clamp(nt + add, 0.05, 0.95)
-                L.frame.BackgroundTransparency = math.clamp(L.baseT / intensity, 0.05, 0.98)
-                if L.image then L.image.ImageTransparency = math.clamp(L.baseT * 0.85, 0.2, 0.92) end
+            if typeof(c) ~= "Color3" then return end
+            glowState.color = c
+            Colors.Glow = c
+            for _, L in ipairs(glowLayers) do
+                if L:IsA("ImageLabel") then
+                    L.ImageColor3 = c
+                elseif L:IsA("Frame") then
+                    L.BackgroundColor3 = c
+                end
             end
         end
-        function GlowAPI.SetSpread(v)
-            applySpread(v)
-            Colors.GlowSpread = spread
+
+        function GlowAPI.SetIntensity(v)
+            glowState.intensity = math.clamp(tonumber(v) or 1, 0.2, 3)
+            Colors.GlowIntensity = glowState.intensity
+            rebuildLayers()
         end
+
+        function GlowAPI.SetTransparency(v)
+            glowState.transparency = math.clamp(tonumber(v) or 0.42, 0.05, 0.9)
+            Colors.GlowTransparency = glowState.transparency
+            rebuildLayers()
+        end
+
+        function GlowAPI.SetSpread(v)
+            glowState.spread = math.clamp(tonumber(v) or 28, 6, 100)
+            Colors.GlowSpread = glowState.spread
+            rebuildLayers()
+        end
+
         function GlowAPI.Pulse(times, speed)
             times = times or 1
-            speed = speed or 0.45
+            speed = speed or 0.4
             task.spawn(function()
                 for _ = 1, times do
                     for _, L in ipairs(glowLayers) do
-                        tween(L.frame, speed * 0.5, {BackgroundTransparency = math.max(0.05, L.frame.BackgroundTransparency - 0.25)})
-                        if L.image then tween(L.image, speed * 0.5, {ImageTransparency = math.max(0.1, L.image.ImageTransparency - 0.2)}) end
+                        if L:IsA("ImageLabel") then
+                            tween(L, speed * 0.45, { ImageTransparency = math.max(0.05, L.ImageTransparency - 0.22) })
+                        elseif L:IsA("Frame") then
+                            tween(L, speed * 0.45, { BackgroundTransparency = math.max(0.2, L.BackgroundTransparency - 0.15) })
+                        end
                     end
                     task.wait(speed * 0.5)
-                    for _, L in ipairs(glowLayers) do
-                        local t = math.clamp(L.baseT / intensity, 0.05, 0.98)
-                        tween(L.frame, speed * 0.5, {BackgroundTransparency = t})
-                        if L.image then tween(L.image, speed * 0.5, {ImageTransparency = math.clamp(t * 0.85, 0.2, 0.92)}) end
-                    end
-                    task.wait(speed * 0.5)
+                    rebuildLayers()
+                    task.wait(speed * 0.35)
                 end
             end)
         end
+
         function GlowAPI.StartPulseLoop(speed)
             GlowAPI.StopPulseLoop()
-            speed = speed or 1.2
+            speed = speed or 1.35
+            local bases = {}
+            for i, L in ipairs(glowLayers) do
+                if L:IsA("ImageLabel") then
+                    bases[i] = L.ImageTransparency
+                elseif L:IsA("Frame") then
+                    bases[i] = L.BackgroundTransparency
+                end
+            end
             glowPulseConn = RunService.RenderStepped:Connect(function()
-                local wave = (math.sin(os.clock() * (2 / speed)) + 1) * 0.5 -- 0..1
-                for _, L in ipairs(glowLayers) do
-                    local t = math.clamp((L.baseT / intensity) - wave * 0.18, 0.05, 0.98)
-                    L.frame.BackgroundTransparency = t
-                    if L.image then L.image.ImageTransparency = math.clamp(t * 0.85, 0.15, 0.95) end
+                local wave = (math.sin(os.clock() * (2.2 / speed)) + 1) * 0.5
+                for i, L in ipairs(glowLayers) do
+                    local b = bases[i] or 0.6
+                    local t = math.clamp(b - wave * 0.16, 0.06, 0.95)
+                    if L:IsA("ImageLabel") then
+                        L.ImageTransparency = t
+                    elseif L:IsA("Frame") then
+                        L.BackgroundTransparency = math.clamp(t + 0.12, 0.25, 0.97)
+                    end
                 end
             end)
         end
+
         function GlowAPI.StopPulseLoop()
-            if glowPulseConn then glowPulseConn:Disconnect() glowPulseConn = nil end
-            applyIntensity(intensity)
+            if glowPulseConn then
+                glowPulseConn:Disconnect()
+                glowPulseConn = nil
+            end
+            rebuildLayers()
         end
-        function GlowAPI.GetRoot() return glowRoot end
+
+        function GlowAPI.GetRoot()
+            return glowRoot
+        end
+
+        -- نمط جاهز شبه الصورة (هالة بنفسجية ناعمة)
+        function GlowAPI.ApplySoftBloomStyle()
+            glowState.spread = 30
+            glowState.transparency = 0.4
+            glowState.intensity = 1.2
+            rebuildLayers()
+        end
 
         if Pack.GlowEnabled == false then
             GlowAPI.SetEnabled(false)
         end
         if Features.GlowPulse or Pack.GlowPulse then
             GlowAPI.StartPulseLoop(Pack.GlowPulseSpeed or 1.4)
+        end
+
+        -- لو حابب اللون البنفسجي زي السكرين من غير ما تغيّر Accent كله:
+        -- Pack.GlowColor = Color3.fromRGB(150, 110, 255)
+        if Pack.SoftBloom == true or Pack.GlowStyle == "soft" then
+            GlowAPI.ApplySoftBloomStyle()
         end
     end
 

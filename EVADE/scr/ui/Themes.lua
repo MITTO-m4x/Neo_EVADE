@@ -1,0 +1,68 @@
+-- Neo Hyper / EVADE
+-- External theme library.
+-- The main script downloads this file from GitHub and builds its palette from it.
+-- Keep this file data-only so themes can be edited without touching the main script.
+
+return {
+    -- name, accent, bg, button, text, outline, dialog, icon
+    OLD = {
+        { "Halloween", "#FF7018", "#22160E", "#482814", "#FFF5E6", "#914818", "#1E130C", "#FF842A" },
+        { "Glass", "#282830", "#14141C", "#3C3C46", "#F5F5FA", "#C8C8D2", "#181820", "#E6E6F0" },
+        { "Halloween Soft", "#FFB45A", "#281C2C", "#3E2822", "#FFF8EC", "#DC96FF", "#302034", "#FFBE64" },
+        { "Candy Corn", "#FFC83C", "#241612", "#462814", "#FFFAE6", "#FF8C32", "#301C16", "#FFA028" },
+        { "Witch Night", "#AA5AFF", "#181024", "#2A1C3A", "#F0E6FF", "#8C50DC", "#201630", "#C88CFF" },
+        { "Pumpkin Patch", "#FF8228", "#201810", "#3A2412", "#FFF0D2", "#5AA046", "#281E14", "#FF9632" },
+        { "Ghost Mist", "#DCE6FF", "#1E2028", "#30323C", "#F5F8FF", "#A0AAC8", "#262832", "#C8D2E6" },
+        { "Royal Purple", "#DCB4FF", "#12081C", "#2A1040", "#FFFFFF", "#8A4DFF", "#1A0C28", "#C084FC" },
+        { "Blood Moon", "#DC3232", "#1C0C0E", "#301012", "#FFEBEB", "#C85050", "#240E10", "#FF6464" },
+        { "Midnight Blue", "#6A8CFF", "#0E1228", "#1C2448", "#D2DCFF", "#4A6AFF", "#161C36", "#8AA4FF" },
+        { "Neon Green", "#40FFAA", "#0C1C12", "#1A3A22", "#D2FFDC", "#30DD88", "#122818", "#66FFBB" },
+        { "Ocean Deep", "#3A8CFF", "#06122A", "#0E2448", "#BEDCFF", "#2A6ADD", "#0A1A36", "#5A9CFF" },
+        { "Sunset Glow", "#FF785A", "#24121C", "#3A1C28", "#FFEBE6", "#FFA050", "#2C1622", "#FF8C64" },
+        { "Cyber Pink", "#FF50B4", "#180C1C", "#301434", "#FFE6F5", "#FF64C8", "#201024", "#FF78C8" },
+        { "Forest", "#78C864", "#0E1810", "#1C2C1E", "#DCF5DC", "#5AAA5A", "#142016", "#8CD278" },
+        { "Arctic", "#8CD2FF", "#121820", "#202A36", "#EBF5FF", "#78B4E6", "#18202A", "#A0DCFF" },
+        { "Gold Luxury", "#FFC850", "#18140C", "#302612", "#FFF5DC", "#DCAA3C", "#201A0E", "#FFD264" },
+        { "Crimson", "#E63C50", "#1C0A0E", "#321016", "#FFE6EB", "#C83246", "#240C12", "#FF5A6E" },
+        { "Lavender", "#BE96FF", "#1C1628", "#302640", "#F5EBFF", "#AA82E6", "#241C32", "#C8AAFF" },
+        { "Mint Cream", "#64E6B4", "#121C1A", "#1E302C", "#E6FFF5", "#50C8A0", "#182422", "#78F0BE" },
+        { "Slate", "#B4BED2", "#1C1E24", "#2C2E36", "#F0F2F8", "#788296", "#22242C", "#C8CDDC" },
+        { "Amber Night", "#FFAA32", "#1A120A", "#30200E", "#FFF0D2", "#E68C28", "#22180C", "#FFB446" },
+        { "Vaporwave", "#FF6EC8", "#140E24", "#28183A", "#FFE6FF", "#50DCFF", "#1C122E", "#8CC8FF" },
+        { "Pure Mono", "#FFFFFF", "#000000", "#121212", "#FFFFFF", "#DCDCDC", "#080808", "#FFFFFF" },
+    },
+
+    -- name, accent, bg, text (button/outline/dialog/icon are derived by the main script)
+    NEW = {
+        { "Matrix", "#00FF66", "#020B05", "#C8FFD9" },
+        { "Synthwave", "#FF2BD6", "#1A0B2E", "#F5D9FF" },
+        { "Dracula", "#BD93F9", "#282A36", "#F8F8F2" },
+        { "Nord", "#88C0D0", "#2E3440", "#ECEFF4" },
+        { "Tokyo Night", "#7AA2F7", "#1A1B26", "#C0CAF5" },
+        { "Catppuccin Mocha", "#CBA6F7", "#1E1E2E", "#CDD6F4" },
+        { "Rose Pine", "#EBBCBA", "#191724", "#E0DEF4" },
+        { "Solarized Dark", "#B58900", "#002B36", "#EEE8D5" },
+        { "Gruvbox", "#FE8019", "#282828", "#EBDBB2" },
+        { "Monokai", "#A6E22E", "#272822", "#F8F8F2" },
+        { "One Dark", "#61AFEF", "#282C34", "#ABB2BF" },
+        { "Toxic", "#B6FF00", "#0B1200", "#EAFFB0" },
+        { "Ice Fire", "#00D4FF", "#0A0F1F", "#FFE1D0" },
+        { "Void", "#8A5CFF", "#050507", "#E6E0FF" },
+        { "Lava", "#FF3B1F", "#120503", "#FFD9CC" },
+        { "Deep Space", "#4C6FFF", "#03040D", "#DCE4FF" },
+        { "Bubblegum", "#FF6EC7", "#2A1030", "#FFE3F4" },
+        { "Emerald", "#10B981", "#06140F", "#D1FAE5" },
+        { "Ruby", "#E11D48", "#15060A", "#FFE4EA" },
+        { "Sapphire", "#2563EB", "#060B1A", "#DBE7FF" },
+        { "Golden Hour", "#FBBF24", "#1A1206", "#FEF3C7" },
+        { "Terminal Amber", "#FFB000", "#0A0700", "#FFD98A" },
+        { "Midnight Red", "#FF4D6D", "#0D0508", "#FFD6DE" },
+        { "Hacker Blue", "#00A2FF", "#00060D", "#BDE8FF" },
+        { "Sakura Night", "#FF8FB8", "#1B1020", "#FFE0EE" },
+        { "Oil Slick", "#00E5C7", "#0A0E14", "#D4FFF8" },
+        { "Cherry Blossom (Light)", "#E75480", "#FFF0F5", "#4A2A35" },
+        { "Snow White (Light)", "#3B82F6", "#F5F7FA", "#1F2937" },
+        { "Sandstone (Light)", "#C2410C", "#F6EFE3", "#3B2F25" },
+        { "Cotton Candy (Light)", "#8B5CF6", "#FDF2FF", "#3B1F5C" },
+    },
+}

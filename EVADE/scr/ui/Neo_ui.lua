@@ -15580,17 +15580,17 @@ function aa.InstallEnhancementPack(self, Window, Config)
     }
 
     local Features = {
-        TeamPanel = Pack.TeamPanel ~= false,
-        FloatingButton = Pack.FloatingButton ~= false,
-        Viewport3D = Pack.Viewport3D ~= false,
-        Glass = Pack.Glass ~= false,
-        AmbientParticles = Pack.AmbientParticles ~= false,
-        BackgroundFX = Pack.BackgroundFX ~= false,
-        ProfileCard = Pack.ProfileCard ~= false,
-        ColorStudio = Pack.ColorStudio ~= false,
-        ShapeStudio = Pack.ShapeStudio ~= false,
+        TeamPanel = false,
+        FloatingButton = false,
+        Viewport3D = false,
+        Glass = false,
+        AmbientParticles = false,
+        BackgroundFX = false,
+        ProfileCard = false,
+        ColorStudio = false,
+        ShapeStudio = false,
         Glow = Pack.Glow ~= false,
-        GlowPulse = Pack.GlowPulse == true,
+        GlowPulse = false,
     }
 
     local gui = Window.UIElements and Window.UIElements.Main
@@ -16116,219 +16116,82 @@ function aa.InstallEnhancementPack(self, Window, Config)
     end
 
     ------------------------------------------------------------------
-    -- 3.5) WINDOW GLOW (توهج ناعم زي PoopHub — هالة ملونة حوالين الإطار)
+    -- 3.5) WINDOW GLOW — single soft fog layer (low overhead)
     ------------------------------------------------------------------
     local GlowAPI = {}
-    local glowLayers = {}
-    local glowRoot
-    local glowPulseConn
+    local glowRoot, glowImage
     local glowState = {
-        color = nil,
-        spread = 28,
-        intensity = 1.15,
-        transparency = 0.42,
-        enabled = true,
+        color = Colors.Glow or Colors.Accent or Color3.fromRGB(140, 100, 255),
+        spread = math.clamp(tonumber(Colors.GlowSpread) or 34, 6, 100),
+        intensity = math.clamp(tonumber(Colors.GlowIntensity) or 1.0, 0.2, 2.0),
+        transparency = math.clamp(tonumber(Colors.GlowTransparency) or 0.38, 0.05, 0.95),
+        enabled = Pack.GlowEnabled ~= false,
+        style = "Fog",
     }
 
     if Features.Glow then
-        -- نفس أسلوب الـ soft outer bloom: صورة ظل Slice ملونة + طبقات متدرجة
-        local GLOW_ASSET = "rbxassetid://8992230677" -- soft rect glow / shadow
-        local winCorner = (Window.UICorner or Window.Radius or 16)
-
-        glowState.color = Colors.Glow or Colors.Accent or Color3.fromRGB(140, 100, 255)
-        glowState.spread = tonumber(Colors.GlowSpread) or tonumber(Pack.GlowSpread) or 28
-        glowState.intensity = math.clamp(tonumber(Colors.GlowIntensity) or tonumber(Pack.GlowIntensity) or 1.15, 0.2, 3)
-        glowState.transparency = math.clamp(tonumber(Colors.GlowTransparency) or tonumber(Pack.GlowTransparency) or 0.42, 0.05, 0.9)
-
-        -- لازم يكون parent على الإطار الخارجي للنافذة ويتبع حجمها
+        -- One blurred image only: no stacked layers, helper frames, or RenderStepped loop.
         glowRoot = mk("Frame", {
-            Name = "WindowGlowRoot",
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 1, 0),
-            Position = UDim2.fromScale(0.5, 0.5),
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            ZIndex = -80,
-            BorderSizePixel = 0,
-            ClipsDescendants = false,
+            Name = "WindowGlowRoot", BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 1, 0), Position = UDim2.fromScale(0.5, 0.5),
+            AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = -80,
+            BorderSizePixel = 0, ClipsDescendants = false, Active = false,
         }, gui)
+        glowImage = mk("ImageLabel", {
+            Name = "SoftFogGlow", BackgroundTransparency = 1,
+            Image = "rbxassetid://8992230677", ImageColor3 = glowState.color,
+            ImageTransparency = 0.38, ScaleType = Enum.ScaleType.Stretch,
+            Size = UDim2.new(1, glowState.spread * 2, 1, glowState.spread * 2),
+            Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5),
+            ZIndex = -79, BorderSizePixel = 0, Active = false, Selectable = false,
+        }, glowRoot)
 
-        -- طبقات التوهج: كل طبقة أكبر شوية وأشفّ → هالة ناعمة برّه الحدود
-        -- (مش مربعات معتمة — صورة ظل Slice زي الـ UI الحديث)
-        local layerSpecs = {
-            -- padScale, imageTransparency base, sizeExtra multiplier
-            { pad = 1.00, t = 0.72, name = "GlowOuter" },
-            { pad = 0.70, t = 0.55, name = "GlowMid" },
-            { pad = 0.42, t = 0.38, name = "GlowInner" },
-            { pad = 0.22, t = 0.28, name = "GlowCore" },
+        local presets = {
+            ["Fog"] = {1.55, 0.90}, ["Wide Fog"] = {2.10, 0.78},
+            ["Halo"] = {1.15, 1.00}, ["Corner Bloom"] = {1.75, 0.82},
+            ["Soft Aura"] = {1.85, 0.76}, ["Tight Glow"] = {0.75, 1.08},
+            ["Dream Mist"] = {2.35, 0.68}, ["Neon Haze"] = {1.25, 1.10},
         }
-
-        local function rebuildLayers()
-            for _, L in ipairs(glowLayers) do
-                pcall(function() L:Destroy() end)
-            end
-            table.clear(glowLayers)
-
-            local spread = glowState.spread
-            local color = glowState.color
-            local inv = glowState.intensity
-            local baseT = glowState.transparency
-
-            for _, spec in ipairs(layerSpecs) do
-                local pad = math.floor(spread * spec.pad)
-                -- شفافية نهائية: أساس الطبقة + إعداد المستخدم / الشدة
-                local imgT = math.clamp((spec.t + baseT * 0.35) / inv, 0.08, 0.92)
-
-                local img = mk("ImageLabel", {
-                    Name = spec.name,
-                    BackgroundTransparency = 1,
-                    Image = GLOW_ASSET,
-                    ImageColor3 = color,
-                    ImageTransparency = imgT,
-                    ScaleType = Enum.ScaleType.Slice,
-                    SliceCenter = Rect.new(99, 99, 99, 99),
-                    Size = UDim2.new(1, pad * 2, 1, pad * 2),
-                    Position = UDim2.fromScale(0.5, 0.5),
-                    AnchorPoint = Vector2.new(0.5, 0.5),
-                    ZIndex = -70,
-                    BorderSizePixel = 0,
-                }, glowRoot)
-
-                -- طبقة لون ناعمة جداً تحت الصورة (تدي عمق للهالة)
-                local soft = mk("Frame", {
-                    Name = spec.name .. "_Soft",
-                    BackgroundColor3 = color,
-                    BackgroundTransparency = math.clamp(imgT + 0.18, 0.35, 0.96),
-                    Size = UDim2.new(1, pad * 1.15, 1, pad * 1.15),
-                    Position = UDim2.fromScale(0.5, 0.5),
-                    AnchorPoint = Vector2.new(0.5, 0.5),
-                    BorderSizePixel = 0,
-                    ZIndex = -71,
-                }, glowRoot)
-                corner(soft, winCorner + math.floor(pad * 0.45))
-
-                table.insert(glowLayers, img)
-                table.insert(glowLayers, soft)
-            end
+        local function applyGlow()
+            if not (glowRoot and glowRoot.Parent and glowImage and glowImage.Parent) then return end
+            local preset = presets[glowState.style] or presets.Fog
+            local pad = math.floor(glowState.spread * preset[1])
+            glowImage.Size = UDim2.new(1, pad * 2, 1, pad * 2)
+            glowImage.ImageColor3 = glowState.color
+            glowImage.ImageTransparency = math.clamp(1 - ((1 - glowState.transparency) * glowState.intensity * preset[2]), 0.06, 0.96)
+            glowRoot.Visible = glowState.enabled
         end
-
-        rebuildLayers()
-
-        local function applyVisible()
-            if glowRoot then glowRoot.Visible = glowState.enabled end
-        end
-
-        function GlowAPI.SetEnabled(v)
-            glowState.enabled = v and true or false
-            applyVisible()
-        end
-
+        function GlowAPI.SetEnabled(v) glowState.enabled = v == true; applyGlow() end
         function GlowAPI.SetColor(c)
-            if typeof(c) ~= "Color3" then return end
-            glowState.color = c
-            Colors.Glow = c
-            for _, L in ipairs(glowLayers) do
-                if L:IsA("ImageLabel") then
-                    L.ImageColor3 = c
-                elseif L:IsA("Frame") then
-                    L.BackgroundColor3 = c
-                end
-            end
+            if typeof(c) == "Color3" then glowState.color = c; Colors.Glow = c; applyGlow() end
         end
-
-        function GlowAPI.SetIntensity(v)
-            glowState.intensity = math.clamp(tonumber(v) or 1, 0.2, 3)
-            Colors.GlowIntensity = glowState.intensity
-            rebuildLayers()
-        end
-
-        function GlowAPI.SetTransparency(v)
-            glowState.transparency = math.clamp(tonumber(v) or 0.42, 0.05, 0.9)
-            Colors.GlowTransparency = glowState.transparency
-            rebuildLayers()
-        end
-
-        function GlowAPI.SetSpread(v)
-            glowState.spread = math.clamp(tonumber(v) or 28, 6, 100)
-            Colors.GlowSpread = glowState.spread
-            rebuildLayers()
-        end
-
-        function GlowAPI.Pulse(times, speed)
-            times = times or 1
-            speed = speed or 0.4
-            task.spawn(function()
-                for _ = 1, times do
-                    for _, L in ipairs(glowLayers) do
-                        if L:IsA("ImageLabel") then
-                            tween(L, speed * 0.45, { ImageTransparency = math.max(0.05, L.ImageTransparency - 0.22) })
-                        elseif L:IsA("Frame") then
-                            tween(L, speed * 0.45, { BackgroundTransparency = math.max(0.2, L.BackgroundTransparency - 0.15) })
-                        end
-                    end
-                    task.wait(speed * 0.5)
-                    rebuildLayers()
-                    task.wait(speed * 0.35)
-                end
-            end)
-        end
-
-        function GlowAPI.StartPulseLoop(speed)
-            GlowAPI.StopPulseLoop()
-            speed = speed or 1.35
-            local bases = {}
-            for i, L in ipairs(glowLayers) do
-                if L:IsA("ImageLabel") then
-                    bases[i] = L.ImageTransparency
-                elseif L:IsA("Frame") then
-                    bases[i] = L.BackgroundTransparency
-                end
-            end
-            glowPulseConn = RunService.RenderStepped:Connect(function()
-                local wave = (math.sin(os.clock() * (2.2 / speed)) + 1) * 0.5
-                for i, L in ipairs(glowLayers) do
-                    local b = bases[i] or 0.6
-                    local t = math.clamp(b - wave * 0.16, 0.06, 0.95)
-                    if L:IsA("ImageLabel") then
-                        L.ImageTransparency = t
-                    elseif L:IsA("Frame") then
-                        L.BackgroundTransparency = math.clamp(t + 0.12, 0.25, 0.97)
-                    end
-                end
-            end)
-        end
-
-        function GlowAPI.StopPulseLoop()
-            if glowPulseConn then
-                glowPulseConn:Disconnect()
-                glowPulseConn = nil
-            end
-            rebuildLayers()
-        end
-
-        function GlowAPI.GetRoot()
-            return glowRoot
-        end
-
-        -- نمط جاهز شبه الصورة (هالة بنفسجية ناعمة)
+        function GlowAPI.SetIntensity(v) glowState.intensity = math.clamp(tonumber(v) or 1, 0.2, 2); applyGlow() end
+        function GlowAPI.SetTransparency(v) glowState.transparency = math.clamp(tonumber(v) or 0.38, 0.05, 0.95); applyGlow() end
+        function GlowAPI.SetSpread(v) glowState.spread = math.clamp(tonumber(v) or 34, 6, 100); applyGlow() end
+        function GlowAPI.SetStyle(v) if presets[v] then glowState.style = v; applyGlow() end end
+        function GlowAPI.GetStyles() return {"Fog", "Wide Fog", "Halo", "Corner Bloom", "Soft Aura", "Tight Glow", "Dream Mist", "Neon Haze"} end
+        function GlowAPI.GetRoot() return glowRoot end
         function GlowAPI.ApplySoftBloomStyle()
-            glowState.spread = 30
-            glowState.transparency = 0.4
-            glowState.intensity = 1.2
-            rebuildLayers()
+            glowState.style = "Fog"; glowState.spread = 38; glowState.transparency = 0.38; glowState.intensity = 1.0; applyGlow()
         end
-
-        if Pack.GlowEnabled == false then
-            GlowAPI.SetEnabled(false)
+        -- Compatibility methods intentionally do not create a permanent frame loop.
+        function GlowAPI.Pulse(times, speed)
+            if not glowImage or not glowImage.Parent then return end
+            local original = glowImage.ImageTransparency
+            task.spawn(function()
+                for _ = 1, math.clamp(tonumber(times) or 1, 1, 4) do
+                    if not glowImage or not glowImage.Parent then break end
+                    tween(glowImage, math.clamp(tonumber(speed) or 0.4, 0.1, 1), {ImageTransparency = math.max(0.08, original - 0.10)})
+                    task.wait(math.clamp(tonumber(speed) or 0.4, 0.1, 1))
+                    if glowImage and glowImage.Parent then tween(glowImage, 0.2, {ImageTransparency = original}) end
+                end
+            end)
         end
-        if Features.GlowPulse or Pack.GlowPulse then
-            GlowAPI.StartPulseLoop(Pack.GlowPulseSpeed or 1.4)
-        end
-
-        -- لو حابب اللون البنفسجي زي السكرين من غير ما تغيّر Accent كله:
-        -- Pack.GlowColor = Color3.fromRGB(150, 110, 255)
-        if Pack.SoftBloom == true or Pack.GlowStyle == "soft" then
-            GlowAPI.ApplySoftBloomStyle()
-        end
+        function GlowAPI.StartPulseLoop() return false end
+        function GlowAPI.StopPulseLoop() applyGlow() end
+        if Pack.SoftBloom == true or Pack.GlowStyle == "soft" then GlowAPI.ApplySoftBloomStyle()
+        elseif Pack.GlowStyle then GlowAPI.SetStyle(Pack.GlowStyle) else applyGlow() end
+        Window.GlowAPI = GlowAPI
     end
 
     ------------------------------------------------------------------
@@ -16893,8 +16756,8 @@ end
 
 local h=aB(aA)
 
--- Enhanced UI pack is installed after the window is created.
-if aa.InstallEnhancementPack then
+-- Install only when explicitly enabled. Native window dragging/closing stays untouched by default.
+if aa.InstallEnhancementPack and aA.EnhancementPack and aA.EnhancementPack.Enabled == true then
     pcall(aa.InstallEnhancementPack, aa, h, aA)
 end
 

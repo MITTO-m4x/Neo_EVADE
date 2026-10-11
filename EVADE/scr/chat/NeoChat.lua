@@ -303,7 +303,7 @@ UI.Title = mk("TextLabel", {
     Size = UDim2.new(1, -235, 0, 24),
     Position = UDim2.fromOffset(19, 8),
     BackgroundTransparency = 1,
-    Text = "CHAT GLOBAL",
+    Text = "GLOBAL CHAT",
     TextColor3 = THEME.TXT,
     Font = Enum.Font.GothamBold,
     TextSize = 20,
@@ -315,7 +315,7 @@ UI.Subtitle = mk("TextLabel", {
     Size = UDim2.new(1, -235, 0, 16),
     Position = UDim2.fromOffset(20, 33),
     BackgroundTransparency = 1,
-    Text = "Neo Hyper • comunidad global",
+    Text = "Neo Hyper • global community",
     TextColor3 = THEME.DIM,
     Font = Enum.Font.GothamMedium,
     TextSize = 13,
@@ -398,7 +398,7 @@ local EmptyLabel = mk("TextLabel", {
     Size = UDim2.new(1, -40, 0, 60),
     Position = UDim2.fromOffset(20, 245),
     BackgroundTransparency = 1,
-    Text = "Conectando al Chat Global...",
+    Text = "Connecting to Global Chat...",
     TextColor3 = THEME.DIM,
     Font = Enum.Font.GothamMedium,
     TextSize = 15,
@@ -506,16 +506,16 @@ UI.MenuDate = mk("TextLabel", {
     Text = "", TextColor3 = THEME.DIM, Font = Enum.Font.GothamMedium, TextSize = 13,
     TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 121,
 }, ActionMenu)
-local ReplyAction = makeActionButton(ActionMenu, "Responder", 230, UI.ICON.reply)
+local ReplyAction = makeActionButton(ActionMenu, "Reply", 230, UI.ICON.reply)
 ReplyAction.Position = UDim2.fromOffset(0, 38)
-local CopyAction = makeActionButton(ActionMenu, "Copiar", 230, UI.ICON.copy)
+local CopyAction = makeActionButton(ActionMenu, "Copy", 230, UI.ICON.copy)
 CopyAction.Position = UDim2.fromOffset(0, 84)
-local DeleteAction = makeActionButton(ActionMenu, "Eliminar", 230, UI.ICON.trash)
+local DeleteAction = makeActionButton(ActionMenu, "Delete", 230, UI.ICON.trash)
 DeleteAction.Position = UDim2.fromOffset(0, 130)
 DeleteAction.TextColor3 = THEME.DANGER
 DeleteAction.Icon.ImageColor3 = THEME.DANGER
 UI.PrivateAction = makeActionButton(ActionMenu, "Mensaje privado", 230, UI.ICON.dm)
-UI.PinAction = makeActionButton(ActionMenu, "Fijar", 230, UI.ICON.pin)
+UI.PinAction = makeActionButton(ActionMenu, "Pin", 230, UI.ICON.pin)
 UI.EditAction = makeActionButton(ActionMenu, "Editar", 230, UI.ICON.pencil) -- v12
 
 -- v11: barra de respuesta estilo Instagram ("Respondiendo a X" + mensaje + X), sin iconos
@@ -596,7 +596,7 @@ local function showMessageActions(meta)
     local isMine = tostring(meta.uid) == tostring(LocalPlayer.UserId)
     local canOwner = Chat.meIsOwner == true and meta.fbKey ~= nil
     DeleteAction.Visible = isMine or canOwner
-    DeleteAction.Text = canOwner and "Eliminar para todos" or "Eliminar para mí"
+    DeleteAction.Text = canOwner and "Delete for everyone" or "Delete for me"
     UI.PrivateAction.Visible = (not isMine) and Chat.kind == "global"
     UI.PinAction.Visible = canOwner
     UI.EditAction.Visible = isMine and meta.fbKey ~= nil and not meta.isSticker and meta.t ~= "invite" and not localDeletedKeys[meta.key]
@@ -679,7 +679,7 @@ local function setReplyTarget(meta)
     preview = preview:gsub("%s+", " "):sub(1, 70)
     -- Mismo formato que NeoChat: {uid,user,dn,text,key}; "name" se mantiene para el render local.
     local quoted = tostring(meta.text or "")
-    if quoted:match("^%[%[STICKER:") then quoted = "[Sticker]" elseif meta.t == "invite" then quoted = "Invitación al servidor" end
+    if quoted:match("^%[%[STICKER:") then quoted = "[Sticker]" elseif meta.t == "invite" then quoted = "Server invite" end
     pendingReply = {
         uid = meta.uid, user = tostring(meta.name or "Unknown"), dn = tostring(meta.dn or meta.name or "Unknown"),
         text = Chat.clip and Chat.clip(quoted, 80) or quoted:sub(1, 80), key = meta.fbKey,
@@ -687,7 +687,7 @@ local function setReplyTarget(meta)
     }
     -- v11: "Respondiendo a <b>usuario</b>" + vista previa del mensaje (como Instagram)
     UI.ReplyTitle.Text = "Respondiendo a <b>" .. Chat.esc(tostring(meta.name or "Unknown")) .. "</b>"
-    ReplyLabel.Text = (meta.isSticker and "Sticker") or (meta.t == "invite" and "Invitación al servidor") or preview
+    ReplyLabel.Text = (meta.isSticker and "Sticker") or (meta.t == "invite" and "Server invite") or preview
     ReplyBanner.Visible = true
     if Chat.refreshTypingPill then Chat.refreshTypingPill() Chat.refreshNewPill() end
     hideMessageActions()
@@ -846,7 +846,7 @@ MessageBox = mk("TextBox", {
     BackgroundTransparency = 1,
     BorderSizePixel = 0,
     Text = "",
-    PlaceholderText = "Mensaje...",
+    PlaceholderText = "Message...",
     PlaceholderColor3 = THEME.DIM,
     TextColor3 = THEME.TXT,
     Font = Enum.Font.GothamMedium,
@@ -1133,7 +1133,7 @@ local function loadStickerRepo()
         if ok2 and type(body) == "string" and #body > 20 then raw = body end
     end
     if not raw or type(loadstring) ~= "function" then
-        warn("[YY Chat] No se pudo descargar el repo de stickers (o falta loadstring); quedan los de respaldo")
+        warn("[YY Chat] Could not descargar el repo de stickers (o falta loadstring); quedan los de respaldo")
         return
     end
     local parsed, data = pcall(function() return loadstring(raw)() end)
@@ -1753,7 +1753,7 @@ renderMessage = function(name, uid, text, ts, id, reply, info)
         UI.icon(chip, UI.ICON.server, 14, Color3.new(1, 1, 1), {LayoutOrder = 1, ZIndex = 5})
         mk("TextLabel", {
             Size = UDim2.fromOffset(0, 26), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 1,
-            Text = "INVITACIÓN", TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBlack, TextSize = 11,
+            Text = "INVITE", TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBlack, TextSize = 11,
             LayoutOrder = 2, ZIndex = 5,
         }, chip)
         -- chip de jugadores
@@ -1783,7 +1783,7 @@ renderMessage = function(name, uid, text, ts, id, reply, info)
         -- Cuerpo
         mk("TextLabel", {
             Size = UDim2.new(1, -28, 0, 20), Position = UDim2.fromOffset(14, 160), BackgroundTransparency = 1,
-            Text = isMe and "Invitaste a todos a tu servidor" or ("@" .. tostring(name) .. " te invita a su servidor"),
+            Text = isMe and "You invited everyone to your server" or ("@" .. tostring(name) .. " invited you to their server"),
             TextColor3 = THEME.TXT, Font = Enum.Font.GothamBold, TextSize = 15,
             TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
         }, inviteCard)
@@ -1817,15 +1817,15 @@ renderMessage = function(name, uid, text, ts, id, reply, info)
             local left = EXPIRE - (os.time() - tsNum)
             if here then
                 statusDot.BackgroundColor3 = UI.C.online
-                statusLbl.Text = "Ya estás en este servidor"
-                joinText.Text = "Estás aquí"
+                statusLbl.Text = "You are already on this server"
+                joinText.Text = "You are here"
                 joinGrad.Enabled = false
                 joinBg.BackgroundColor3 = THEME.PANEL2
                 joinText.TextColor3 = UI.C.online
             elseif left <= 0 then
                 statusDot.BackgroundColor3 = THEME.DIM
-                statusLbl.Text = "La invitación expiró"
-                joinText.Text = "Invitación expirada"
+                statusLbl.Text = "Invite expired"
+                joinText.Text = "Invite expired"
                 joinGrad.Enabled = false
                 joinBg.BackgroundColor3 = THEME.PANEL2
                 joinText.TextColor3 = THEME.DIM
@@ -1833,7 +1833,7 @@ renderMessage = function(name, uid, text, ts, id, reply, info)
                 local mins = math.max(1, math.ceil(left / 60))
                 statusDot.BackgroundColor3 = UI.C.online
                 statusLbl.Text = "Activa · expira en " .. mins .. " min"
-                joinText.Text = "Unirse al servidor"
+                joinText.Text = "Join server"
                 joinGrad.Enabled = true
                 joinBg.BackgroundColor3 = Color3.new(1, 1, 1)
                 joinText.TextColor3 = Color3.new(1, 1, 1)
@@ -1844,7 +1844,7 @@ renderMessage = function(name, uid, text, ts, id, reply, info)
         joinBtn.MouseButton1Click:Connect(function()
             if here or joining or (EXPIRE - (os.time() - tsNum)) <= 0 then return end
             joining = true
-            joinText.Text = "Uniéndote..."
+            joinText.Text = "Joining..."
             pcall(function()
                 game:GetService("TeleportService"):TeleportToPlaceInstance(placeId, tostring(info.job), LocalPlayer)
             end)
@@ -1864,7 +1864,7 @@ renderMessage = function(name, uid, text, ts, id, reply, info)
         stampLabel, statusHolder = makeStamp(inviteCard, true)
         statusHolder.Position = UDim2.new(1, -14, 1, -12)
     else
-        local messageText = wasDeleted and "Este mensaje fue eliminado" or tostring(text or "")
+        local messageText = wasDeleted and "This message was deleted" or tostring(text or "")
         local maxBubbleWidth = math.max(170, math.floor((MessageScroll.AbsoluteSize.X * 0.72) - 8))
         local textMaxWidth = math.max(120, maxBubbleWidth - 28)
         -- v10: owners con letra mas gruesa; formato tipo Discord (# titulos, **negrita**, etc.)
@@ -2118,7 +2118,7 @@ local function sendPayload(text, extra)
                 Chat.setStatus(meta, "failed")
             end
         end
-        -- Privado: aviso en inbox/<uidDelOtro> para que le aparezca el chat aunque no lo haya abierto.
+        -- Private: aviso en inbox/<uidDelOtro> para que le aparezca el chat aunque no lo haya abierto.
         if ok and target and Chat.inboxOk then
             local _, _, code = Chat.fbCall("PUT", "inbox/" .. tostring(target) .. "/" .. tostring(LocalPlayer.UserId), {
                 uid=LocalPlayer.UserId, user=LocalPlayer.Name, dn=LocalPlayer.DisplayName,
@@ -2296,7 +2296,7 @@ end
 -- ----- Vista previa para la lista de chats -----
 Chat.previewText = function(m)
     if type(m) ~= "table" then return "" end
-    if m.t == "invite" then return "Invitación al servidor" end
+    if m.t == "invite" then return "Server invite" end
     local text = tostring(m.text or "")
     if text:match("^%[%[STICKER:") then return "Sticker" end
     text = Chat.rainbowBody(text) or text
@@ -2337,7 +2337,7 @@ Chat.ownerDelete = function(meta)
         if ok then
             Chat.removeRow(meta)
         else
-            Chat.flash("Firebase rechazó el borrado (código " .. tostring(code) .. ")")
+            Chat.flash("Firebase rejected delete (code " .. tostring(code) .. ")")
         end
     end)
 end
@@ -2356,7 +2356,7 @@ Chat.pinMessage = function(meta)
                 Chat.refreshPin()
             end
         else
-            Chat.flash("No se pudo fijar (código " .. tostring(code) .. ")")
+            Chat.flash("Could not pin (code " .. tostring(code) .. ")")
         end
     end)
 end
@@ -2447,9 +2447,9 @@ do
     mk("UIListLayout", {SortOrder = Enum.SortOrder.LayoutOrder}, UI.MoreMenu)
     mk("UIPadding", {PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6)}, UI.MoreMenu)
     UI.MoreOnline = makeActionButton(UI.MoreMenu, "Ver conectados", 240, UI.ICON.people)
-    UI.MoreMute = makeActionButton(UI.MoreMenu, "Silenciar", 240, UI.ICON.bellOff)
+    UI.MoreMute = makeActionButton(UI.MoreMenu, "Mute", 240, UI.ICON.bellOff)
     UI.MoreHome = makeActionButton(UI.MoreMenu, "Volver a chats", 240, UI.ICON.back)
-    UI.MoreDelete = makeActionButton(UI.MoreMenu, "Eliminar chat", 240, UI.ICON.trash)
+    UI.MoreDelete = makeActionButton(UI.MoreMenu, "Delete chat", 240, UI.ICON.trash)
     UI.MoreDelete.TextColor3 = THEME.DANGER
     UI.MoreDelete.Icon.ImageColor3 = THEME.DANGER
     for i, b in ipairs({UI.MoreOnline, UI.MoreMute, UI.MoreHome, UI.MoreDelete}) do
@@ -2486,7 +2486,7 @@ do
     UI.icon(UI.SearchBar, UI.ICON.search, 16, THEME.DIM, {Position = UDim2.fromOffset(14, 10), ZIndex = 61})
     UI.SearchBox = mk("TextBox", {
         Size = UDim2.new(1, -54, 1, 0), Position = UDim2.fromOffset(40, 0),
-        BackgroundTransparency = 1, Text = "", PlaceholderText = "Buscar en el chat",
+        BackgroundTransparency = 1, Text = "", PlaceholderText = "Search in chat",
         PlaceholderColor3 = THEME.DIM, TextColor3 = THEME.TXT, Font = Enum.Font.GothamMedium,
         TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false, ZIndex = 61,
     }, UI.SearchBar)
@@ -2501,7 +2501,7 @@ do
     UI.NewChatBox = mk("TextBox", {
         Size = UDim2.new(1, -120, 1, 0), Position = UDim2.fromOffset(40, 0),
         BackgroundTransparency = 1, BorderSizePixel = 0, Text = "",
-        PlaceholderText = "Buscar o escribir un usuario", PlaceholderColor3 = THEME.DIM,
+        PlaceholderText = "Search or type a username", PlaceholderColor3 = THEME.DIM,
         TextColor3 = THEME.TXT, Font = Enum.Font.GothamMedium, TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false,
     }, UI.NewChatBar)
@@ -2550,7 +2550,7 @@ do
     stroke(UI.OnlinePanel, UI.C.line, 1, 0)
     UI.OnlineTitle = mk("TextLabel", {
         Size = UDim2.new(1, -60, 0, 40), Position = UDim2.fromOffset(16, 4),
-        BackgroundTransparency = 1, Text = "En línea", TextColor3 = THEME.TXT,
+        BackgroundTransparency = 1, Text = "Online", TextColor3 = THEME.TXT,
         Font = Enum.Font.GothamBold, TextSize = 16, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 141,
     }, UI.OnlinePanel)
     local onlineClose = mk("TextButton", {
@@ -2659,7 +2659,7 @@ Chat.showProfile = function(p)
     local tag = Chat.scriptTag(p.script)
     local extra = {}
     if tag then extra[#extra + 1] = "Usa " .. tag end
-    if Chat.onlineMap[tostring(uid)] then extra[#extra + 1] = "En línea" end
+    if Chat.onlineMap[tostring(uid)] then extra[#extra + 1] = "Online" end
     if #extra > 0 then
         line(4, {Text = table.concat(extra, "  ·  "), TextColor3 = THEME.DIM, Font = Enum.Font.GothamMedium, TextSize = 13})
     end
@@ -2667,7 +2667,7 @@ Chat.showProfile = function(p)
     if uid ~= 0 and uid ~= LocalPlayer.UserId then
         local dm = mk("TextButton", {
             Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = UI.C.blue, BorderSizePixel = 0,
-            Text = "Enviar mensaje", TextColor3 = Color3.new(1, 1, 1),
+            Text = "Send message", TextColor3 = Color3.new(1, 1, 1),
             Font = Enum.Font.GothamBold, TextSize = 15, LayoutOrder = 7, ZIndex = 141,
         }, UI.Profile)
         corner(dm, 12)
@@ -2678,7 +2678,7 @@ Chat.showProfile = function(p)
     end
     local close = mk("TextButton", {
         Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = THEME.PANEL2, BorderSizePixel = 0,
-        Text = "Cerrar", TextColor3 = THEME.TXT, Font = Enum.Font.GothamBold, TextSize = 14,
+        Text = "Close", TextColor3 = THEME.TXT, Font = Enum.Font.GothamBold, TextSize = 14,
         LayoutOrder = 8, ZIndex = 141,
     }, UI.Profile)
     corner(close, 12)
@@ -2695,7 +2695,7 @@ Chat.showOnline = function()
     local names = {}
     for _, n in pairs(Chat.onlineMap) do names[#names + 1] = Chat.maskName(n) end
     table.sort(names)
-    UI.OnlineTitle.Text = "En línea con el script (" .. tostring(#names) .. ")"
+    UI.OnlineTitle.Text = "Online with the script (" .. tostring(#names) .. ")"
     for i, n in ipairs(names) do
         local row = mk("Frame", {
             Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1, LayoutOrder = i, ZIndex = 142,
@@ -2713,7 +2713,7 @@ Chat.showOnline = function()
     end
     if #names == 0 then
         mk("TextLabel", {
-            Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1, Text = "Sin datos de presencia todavía",
+            Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1, Text = "No presence data yet",
             TextColor3 = THEME.DIM, Font = Enum.Font.GothamMedium, TextSize = 14, ZIndex = 142,
         }, UI.OnlineList)
     end
@@ -2802,7 +2802,7 @@ Chat.sideNotif = function(msg, room)
     corner(pic, 21)
     mk("TextLabel", {
         Size = UDim2.new(1, -70, 0, 18), Position = UDim2.fromOffset(62, 12), BackgroundTransparency = 1,
-        Text = isDM and tostring(msg.dn or msg.user or "Alguien") or ("Chat Global · " .. tostring(msg.dn or msg.user or "Alguien")),
+        Text = isDM and tostring(msg.dn or msg.user or "Someone") or ("Chat Global · " .. tostring(msg.dn or msg.user or "Someone")),
         TextColor3 = THEME.TXT, Font = Enum.Font.GothamBold, TextSize = 14,
         TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 202,
     }, card)
@@ -2912,17 +2912,17 @@ Chat.updateHeader = function()
     UI.Subtitle.Size = UDim2.new(1, -372, 0, 16)
     local muted = Chat.settings.MutedRooms[Chat.room] == true
     UI.MuteIcon.Image = muted and UI.ICON.bellOff or UI.ICON.bell
-    UI.MoreMute.Text = muted and "Activar notificaciones" or "Silenciar"
+    UI.MoreMute.Text = muted and "Unmute notifications" or "Mute"
     UI.MoreMute.Icon.Image = muted and UI.ICON.bell or UI.ICON.bellOff
     UI.MoreDelete.Visible = Chat.kind == "private"
     if Chat.kind == "global" then
         UI.HeaderAvatar.Image = UI.ICON.group
         UI.HeaderRing.Enabled = true
         UI.HeaderDot.Visible = false
-        UI.Title.Text = "Chat Global"
+        UI.Title.Text = "Global Chat"
         -- v12: si alguien escribe en el grupo se muestra en el subtitulo (como WhatsApp)
         UI.Subtitle.Text = (Chat.typing and Chat.typingNames and #Chat.typingNames > 0) and Chat.typingText(Chat.typingNames)
-            or (tostring(Chat.onlineCount or 0) .. " en línea · Neo Hyper")
+            or (tostring(Chat.onlineCount or 0) .. " online · Neo Hyper")
     else
         UI.HeaderAvatar.Image = Chat.avatarFor(Chat.target, Chat.targetUser)
         UI.HeaderRing.Enabled = false
@@ -2930,11 +2930,11 @@ Chat.updateHeader = function()
         UI.HeaderDot.Visible = online
         UI.Title.Text = tostring(Chat.targetName or "Jugador")
         if Chat.typing then
-            UI.Subtitle.Text = "escribiendo..."
+            UI.Subtitle.Text = "typing..."
         elseif online then
-            UI.Subtitle.Text = "En línea"
+            UI.Subtitle.Text = "Online"
         else
-            UI.Subtitle.Text = Chat.targetUser and ("@" .. Chat.targetUser) or "Privado"
+            UI.Subtitle.Text = Chat.targetUser and ("@" .. Chat.targetUser) or "Private"
         end
     end
     local others = 0
@@ -3128,9 +3128,9 @@ end
 Chat.previewLine = function(p, isGroup)
     if not p then return nil end
     local mine = tonumber(p.uid) == LocalPlayer.UserId
-    if p.kind == "sticker" then return mine and "Enviaste un sticker" or ((isGroup and (p.name .. " envió") or "Envió") .. " un sticker") end
-    if p.kind == "invite" then return mine and "Enviaste una invitación" or ((isGroup and (p.name .. " envió") or "Envió") .. " una invitación") end
-    if mine then return "Tú: " .. p.text end
+    if p.kind == "sticker" then return mine and "You sent a sticker" or ((isGroup and (p.name .. " sent") or "Sent") .. " a sticker") end
+    if p.kind == "invite" then return mine and "You sent an invite" or ((isGroup and (p.name .. " sent") or "Sent") .. " an invite") end
+    if mine then return "You: " .. p.text end
     return isGroup and (p.name .. ": " .. p.text) or p.text
 end
 
@@ -3152,13 +3152,13 @@ Chat.refreshHome = function(force)
     local gp = Chat.previews[g]
     -- 1) Grupo fijado
     add({
-        pinned = true, title = "Chat Global", search = "global grupo neo hyper",
+        pinned = true, title = "Global Chat", search = "global grupo neo hyper",
         sub = Chat.previewLine(gp, true) or "Comunidad Neo Hyper · todos los scripts",
-        extra = tostring(Chat.onlineCount or 0) .. " en línea" .. (gp and ("  ·  " .. UI.relTime(gp.ts)) or ""),
+        extra = tostring(Chat.onlineCount or 0) .. " online" .. (gp and ("  ·  " .. UI.relTime(gp.ts)) or ""),
         unread = Chat.unread[g] or 0, image = UI.ICON.group, muted = muted[g] == true,
         onClick = function() Chat.openChat("global") end,
     })
-    -- 2) Privados recientes (ordenados por ultimo mensaje)
+    -- 2) Privates recientes (ordenados por ultimo mensaje)
     local dms = {}
     for _, e in ipairs(Chat.settings.RecentDMs) do
         local uid = type(e) == "table" and tonumber(e.uid)
@@ -3183,7 +3183,7 @@ Chat.refreshHome = function(force)
             onDelete = function() Chat.askDeleteChat(d.uid, tostring(d.e.name or d.e.user or d.uid)) end,
         }
     end
-    if #dmItems > 0 then add({section = "Mensajes"}) end
+    if #dmItems > 0 then add({section = "Messages"}) end
     for _, e in ipairs(dmItems) do add(e) end
     -- 3) Jugadores del servidor actual
     local others = {}
@@ -3261,8 +3261,8 @@ do
             Font = Enum.Font.GothamBold, TextSize = 16, LayoutOrder = order, ZIndex = 162,
         }, box)
     end
-    UI.ConfirmOk = sheetButton("Eliminar", THEME.DANGER, 4)
-    UI.ConfirmCancel = sheetButton("Cancelar", THEME.TXT, 6)
+    UI.ConfirmOk = sheetButton("Delete", THEME.DANGER, 4)
+    UI.ConfirmCancel = sheetButton("Cancel", THEME.TXT, 6)
     UI.ConfirmCancel.MouseButton1Click:Connect(function() UI.Confirm.Visible = false end)
     UI.Confirm.MouseButton1Click:Connect(function() UI.Confirm.Visible = false end)
     UI.ConfirmOk.MouseButton1Click:Connect(function()
@@ -3276,8 +3276,8 @@ end
 Chat.askDeleteChat = function(uid, name)
     uid = tonumber(uid)
     if not uid then return end
-    UI.ConfirmTitle.Text = "¿Eliminar el chat con " .. tostring(name) .. "?"
-    UI.ConfirmBody.Text = "Se quita de tu lista de chats. Si te vuelve a escribir, el chat aparecerá de nuevo."
+    UI.ConfirmTitle.Text = "Delete chat with " .. tostring(name) .. "?"
+    UI.ConfirmBody.Text = "Removed from your chat list. If they message you again, the chat will reappear."
     Chat.confirmAction = function() Chat.deleteChat(uid) end
     UI.Confirm.Visible = true
 end
@@ -3401,8 +3401,8 @@ Chat.startChatByName = function()
     task.spawn(function()
         local okId, uid = pcall(function() return Players:GetUserIdFromNameAsync(raw) end)
         UI.NewChatGo.Text = "Abrir"
-        if not okId or not tonumber(uid) then Chat.flash("No encontré a ese usuario") return end
-        if tonumber(uid) == LocalPlayer.UserId then Chat.flash("Ese eres tú") return end
+        if not okId or not tonumber(uid) then Chat.flash("User not found") return end
+        if tonumber(uid) == LocalPlayer.UserId then Chat.flash("That is you") return end
         local okName, realName = pcall(function() return Players:GetNameFromUserIdAsync(uid) end)
         local user = (okName and realName) or raw
         UI.NewChatBox.Text = ""
@@ -3414,7 +3414,7 @@ Chat.sendInvite = function()
     if Chat.view ~= "chat" then return end
     local left = 30 - (os.clock() - Chat.lastInvite)
     if left > 0 then
-        Chat.flash("Espera " .. tostring(math.ceil(left)) .. "s para otra invitación")
+        Chat.flash("Wait " .. tostring(math.ceil(left)) .. "s for another invite")
         return
     end
     Chat.lastInvite = os.clock()
@@ -3582,7 +3582,7 @@ Chat.watchTick = function(rr)
             end
         end
     end
-    -- 3) Privados: los marcados por el inbox + 2 recientes por vuelta
+    -- 3) Privates: los marcados por el inbox + 2 recientes por vuelta
     local toCheck = {}
     for room in pairs(Chat.checkQueue) do toCheck[#toCheck + 1] = room end
     table.clear(Chat.checkQueue)
@@ -3637,7 +3637,7 @@ UI.NewChatGo.MouseButton1Click:Connect(function() Chat.startChatByName() end)
 UI.NewChatBox.FocusLost:Connect(function(enterPressed) if enterPressed then Chat.startChatByName() end end)
 UI.InviteButton.MouseButton1Click:Connect(function() Chat.sendInvite() end)
 MessageBox:GetPropertyChangedSignal("Text"):Connect(function()
-    -- "escribiendo..." en privados y (v12) tambien en el global; mismo nodo typing/<sala>/<uid> que NeoChat
+    -- "typing..." en privados y (v12) tambien en el global; mismo nodo typing/<sala>/<uid> que NeoChat
     -- (se agrega "n" = usuario para poder mostrar quien escribe en el grupo)
     if Chat.view ~= "chat" or MessageBox.Text == "" or Chat.editing then return end
     if os.clock() - Chat.lastTypingPush < 2.5 then return end
@@ -3678,7 +3678,7 @@ do
     UI.ProxyBox = mk("TextBox", {
         AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 14, 0.5, 0),
         Size = UDim2.new(1, -66, 0, 36), BackgroundTransparency = 1, BorderSizePixel = 0,
-        Text = "", PlaceholderText = "Mensaje...", PlaceholderColor3 = THEME.DIM, TextColor3 = THEME.TXT,
+        Text = "", PlaceholderText = "Message...", PlaceholderColor3 = THEME.DIM, TextColor3 = THEME.TXT,
         Font = Enum.Font.GothamMedium, TextSize = 17, TextXAlignment = Enum.TextXAlignment.Left,
         ClearTextOnFocus = false, ZIndex = 302,
     }, UI.Proxy)
@@ -3748,7 +3748,7 @@ Chat.submitProxy = function()
     local submit = Chat.proxy.submit
     if submit then submit() end
     if Chat.proxy.target == MessageBox then
-        -- sigue escribiendo como en WhatsApp: la barra queda abierta y vacia
+        -- sigue typing como en WhatsApp: la barra queda abierta y vacia
         UI.ProxyBox.Text = ""
         task.defer(function() pcall(function() UI.ProxyBox:CaptureFocus() end) end)
     else
@@ -3804,7 +3804,7 @@ Chat.bindProxy(UI.NewChatBox, function() Chat.startChatByName() end)
 Chat.bindProxy(AddStickerInput, nil)
 
 -- =====================================================================
--- ===== v12: editar, escribiendo..., mensajes nuevos, doble toque, Discord, superposiciones =====
+-- ===== v12: editar, typing..., mensajes nuevos, doble toque, Discord, superposiciones =====
 -- =====================================================================
 
 -- Hora del servidor estimada (corrige el reloj del celular con la respuesta de presence)
@@ -3834,7 +3834,7 @@ Chat.startEdit = function(meta)
     if not meta or not meta.fbKey then return end
     cancelReply()
     Chat.editing = meta
-    UI.ReplyTitle.Text = "<b>Editando mensaje</b>"
+    UI.ReplyTitle.Text = "<b>Editing message</b>"
     ReplyLabel.Text = tostring(meta.text or "")
     ReplyBanner.Visible = true
     MessageBox.Text = tostring(meta.text or "")
@@ -3851,21 +3851,21 @@ Chat.submitEdit = function(newText)
     task.spawn(function()
         local ok, _, code = Chat.fbCall("PATCH", "chat/" .. room .. "/messages/" .. meta.fbKey, {text = newText, edited = true})
         if not ok then
-            Chat.flash("No se pudo editar (código " .. tostring(code) .. ")")
+            Chat.flash("Could not edit (code " .. tostring(code) .. ")")
             local cur = Chat.byFbKey[meta.fbKey]
             if cur and room == Chat.room then Chat.rerender(cur, old, oldEdited) end
         end
     end)
 end
 
--- ----- "escribiendo..." -----
+-- ----- "typing..." -----
 Chat.typingText = function(names)
     names = names or {}
     if #names == 0 then return "" end
-    if Chat.kind == "private" then return "escribiendo..." end
-    if #names == 1 then return names[1] .. " está escribiendo..." end
-    if #names == 2 then return names[1] .. " y " .. names[2] .. " están escribiendo..." end
-    return #names .. " personas están escribiendo..."
+    if Chat.kind == "private" then return "typing..." end
+    if #names == 1 then return names[1] .. " is typing..." end
+    if #names == 2 then return names[1] .. " and " .. names[2] .. " are typing..." end
+    return #names .. " people are typing..."
 end
 
 do
@@ -3914,7 +3914,7 @@ Chat.refreshTypingPill = function()
     local show = Chat.view == "chat" and #names > 0 and not Chat.editing
     UI.TypingPill.Visible = show
     if show then
-        UI.TypingLabel.Text = Chat.kind == "private" and (tostring(Chat.targetUser or Chat.targetName or "") .. " está escribiendo...") or Chat.typingText(names)
+        UI.TypingLabel.Text = Chat.kind == "private" and (tostring(Chat.targetUser or Chat.targetName or "") .. " is typing...") or Chat.typingText(names)
         UI.TypingPill.Position = UDim2.new(0, 16, 1, ReplyBanner.Visible and -136 or -72)
     end
 end
@@ -3947,7 +3947,7 @@ Chat.refreshNewPill = function()
     local n = Chat.newBelow or 0
     UI.NewPill.Visible = Chat.view == "chat" and n > 0
     if n > 0 then
-        UI.NewPillLabel.Text = "↓  " .. (n == 1 and "1 mensaje nuevo" or (n .. " mensajes nuevos"))
+        UI.NewPillLabel.Text = "↓  " .. (n == 1 and "1 new message" or (n .. " new messages"))
         UI.NewPill.Position = UDim2.new(0.5, 0, 1, ReplyBanner.Visible and -140 or -76)
     end
 end
@@ -4049,7 +4049,7 @@ Chat.discordCard = function(parent, code, isMe)
     stroke(card, BLURPLE, 1.2, 0.35)
     mk("TextLabel", {
         Size = UDim2.new(1, -24, 0, 16), Position = UDim2.fromOffset(14, 10), BackgroundTransparency = 1,
-        Text = isMe and "INVITASTE A UN SERVIDOR DE DISCORD" or "TE INVITARON A UN SERVIDOR DE DISCORD",
+        Text = isMe and "YOU INVITED TO A DISCORD SERVER" or "YOU WERE INVITED TO A DISCORD SERVER",
         TextColor3 = Color3.fromRGB(181, 186, 193), Font = Enum.Font.GothamBlack, TextSize = 11,
         TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
     }, card)
@@ -4068,7 +4068,7 @@ Chat.discordCard = function(parent, code, isMe)
     corner(iconImg, 16)
     local nameLbl = mk("TextLabel", {
         Size = UDim2.new(1, -96, 0, 22), Position = UDim2.fromOffset(80, 36), BackgroundTransparency = 1,
-        Text = "Cargando...", TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBold, TextSize = 17,
+        Text = "Loading...", TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBold, TextSize = 17,
         TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
     }, card)
     local statsLbl = mk("TextLabel", {
@@ -4093,7 +4093,7 @@ Chat.discordCard = function(parent, code, isMe)
     Chat.fetchDiscord(code, function(d)
         if not card.Parent then return end
         if not d then
-            nameLbl.Text = "Invitación no válida o expirada"
+            nameLbl.Text = "Invite invalid or expired"
             nameLbl.TextColor3 = Color3.fromRGB(181, 186, 193)
             initials.Text = "?"
             join.BackgroundColor3 = THEME.PANEL2
@@ -4107,7 +4107,7 @@ Chat.discordCard = function(parent, code, isMe)
         initials.Text = ini
         if d.iconAsset then iconImg.Image = d.iconAsset end
         local parts = {}
-        if d.online then parts[#parts + 1] = '<font color="#23A55A">●</font> ' .. d.online .. " en línea" end
+        if d.online then parts[#parts + 1] = '<font color="#23A55A">●</font> ' .. d.online .. " online" end
         if d.members then parts[#parts + 1] = '<font color="#80848E">●</font> ' .. d.members .. " miembros" end
         if #parts > 0 then statsLbl.Text = table.concat(parts, "   ") end
     end)
@@ -4690,7 +4690,7 @@ Chat.populateFavs = function()
     if not any then
         mk("TextLabel", {
             Size = UDim2.fromOffset(240, 40), BackgroundTransparency = 1,
-            Text = "Aún no enviaste stickers", TextColor3 = THEME.DIM,
+            Text = "You have not sent stickers yet", TextColor3 = THEME.DIM,
             Font = Enum.Font.GothamMedium, TextSize = 12, TextWrapped = true, ZIndex = 53,
         }, UI.FavGrid)
     end
@@ -4831,7 +4831,7 @@ task.spawn(function()
                 if firebaseInitialLoad then
                     firebaseInitialLoad = false
                     if next(messageRows) == nil then
-                        EmptyLabel.Text = "Aún no hay mensajes. ¡Escribe el primero!"
+                        EmptyLabel.Text = "No messages yet. Write the first one!"
                         EmptyLabel.Visible = true
                     end
                 end
@@ -4844,7 +4844,7 @@ task.spawn(function()
                     Chat.refreshPin()
                 end
             end
-            -- "escribiendo..." en privados y (v12) en el global, con nombres (como grupos de WhatsApp)
+            -- "typing..." en privados y (v12) en el global, con nombres (como grupos de WhatsApp)
             if rgen == Chat.roomGen then
                 local tok, td = Chat.fbCall("GET", "typing/" .. room)
                 if tok and rgen == Chat.roomGen then
@@ -4854,7 +4854,7 @@ task.spawn(function()
                         for tuid, v in pairs(td) do
                             if tostring(tuid) ~= tostring(LocalPlayer.UserId) and type(v) == "table"
                                 and tonumber(v.t) and math.abs(now - v.t) < 5000 then
-                                names[#names + 1] = tostring(v.n or (Chat.kind == "private" and Chat.targetUser) or "Alguien")
+                                names[#names + 1] = tostring(v.n or (Chat.kind == "private" and Chat.targetUser) or "Someone")
                             end
                         end
                     end

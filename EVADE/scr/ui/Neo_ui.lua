@@ -1,17 +1,6 @@
 --[[
-     _      ___         ____  ______
-    | | /| / (_)__  ___/ / / / /  _/
-    | |/ |/ / / _ \/ _  / /_/ // /  
-    |__/|__/_/_//_/\_,_/\____/___/
-    
-    v1.6.65  |  2026-07-01  |  Roblox UI Library for scripts
-    
-    To view the source code, see the `src/` folder on the official GitHub repository.
-    
-    Author: Footagesus (Footages, .ftgs, oftgs)
-    Github: https://github.com/Footagesus/WindUI
-    Discord: https://discord.gg/ftgs-development-hub-1300692552005189632
-    License: MIT
+    Neo Hyper integration: Neo Dynamic Island 1.0.0 — By MITTO
+    New WindUI integration points are marked "NEO ISLAND".
 ]]
 
 type ConfigType__DARKLUA_TYPE_a={
@@ -5366,6 +5355,7 @@ ad(an.TextButton,.1,{BackgroundTransparency=1}):Play()
 end)
 
 local ao=ab.Drag(al)
+ag.DragController=ao -- NEO ISLAND: lets the fixed capsule disable dragging without moving it.
 
 
 function ag.Visible(ap,aq)
@@ -14171,6 +14161,7 @@ end
 
 function aw.SetSize(A,B)
 if typeof(B)=="UDim2"then
+if aw.__NeoIsland then aw.__NeoIsland:BeforeLayout("SetSize",0.12)end -- NEO ISLAND
 aw.Size=B
 
 ap(aw.UIElements.Main,0.08,{Size=B},Enum.EasingStyle.Quint,Enum.EasingDirection.Out):Play()
@@ -14211,6 +14202,7 @@ aw.Topbar.ButtonsType=="Mac"and 9 or nil
 )
 
 local function SetSize(C)
+if aw.__NeoIsland then aw.__NeoIsland:BeforeLayout("fullscreen layout",0.5)end -- NEO ISLAND
 ap(aw.UIElements.Main,0.45,{
 Size=not aw.IsFullscreen and B or UDim2.new(
 0,
@@ -14317,6 +14309,7 @@ function aw.Open(C)
 if aw.Destroyed then
 return
 end
+if aw.__NeoIsland then return aw.__NeoIsland:Open()end -- NEO ISLAND
 task.spawn(function()
 if aw.OnOpenCallback then
 task.spawn(function()
@@ -14325,6 +14318,7 @@ end)
 end
 
 task.wait(0.06)
+if aw.__NeoIsland then return end -- NEO ISLAND: the controller owns opening after installation.
 aw.Closed=false
 
 aw.UIElements.Main.Size=UDim2.new(aw.Size.X.Scale,aw.Size.X.Offset,0,100)
@@ -14414,7 +14408,7 @@ function aw.Close(C)
 if aw.Destroyed then
 return
 end
-
+if aw.__NeoIsland then return aw.__NeoIsland:Close()end -- NEO ISLAND
 local F={}
 
 if aw.OnCloseCallback then
@@ -14529,8 +14523,69 @@ end
 return F
 end
 function aw.Destroy(C)
+if aw.__NeoIsland then return aw.__NeoIsland:DestroyWindow()end -- NEO ISLAND
 return aw:Close():Destroy()
 end
+-- NEO ISLAND: narrow bridge to existing private locals; native callbacks remain unchanged.
+aw.__NeoBridge={
+SetDrag=function(C)
+z:Set(C and true or false)
+end,
+PrepareOpen=function()
+local C=aw.Transparent and av.WindUI.TransparencyValue or 0
+-- A new tween for the same property overrides an in-flight native open tween.
+ap(aw.UIElements.Main,0,{Size=aw.Size}):Play()
+aw.UIElements.Main.Size=aw.Size
+ap(aw.UIElements.Main.Background,0,{ImageTransparency=C}):Play()
+aw.UIElements.Main.Background.ImageTransparency=C
+if aw.UIElements.BackgroundGradient then
+ap(aw.UIElements.BackgroundGradient,0,{ImageTransparency=0}):Play()
+aw.UIElements.BackgroundGradient.ImageTransparency=0
+end
+if i then
+if i:IsA"VideoFrame"then
+i.Visible=true
+else
+ap(i,0,{ImageTransparency=aw.BackgroundImageTransparency}):Play()
+i.ImageTransparency=aw.BackgroundImageTransparency
+end
+end
+ap(b,0,{ImageTransparency=aw.ShadowTransparency}):Play()
+b.ImageTransparency=aw.ShadowTransparency
+ap(r,0,{Size=UDim2.new(0,aw.DragFrameSize,0,4),ImageTransparency=0.8}):Play()
+r.Size=UDim2.new(0,aw.DragFrameSize,0,4)
+r.ImageTransparency=0.8
+if aw.Resizable then
+ap(az.ImageLabel,0,{ImageTransparency=0.8}):Play()
+az.ImageLabel.ImageTransparency=0.8
+end
+aw.CanResize=aw.Resizable and not aw.IsFullscreen
+aw.CanDropdown=true
+aw.Closed=false
+z:Set(not aw.IsFullscreen)
+aw.UIElements.Main.Visible=true
+aw.UIElements.Main.Main.Visible=true
+av.WindUI:ToggleAcrylic(true)
+end,
+DestroyApplication=function()
+if aw.Destroyed then return end
+if aw.OnDestroyCallback then
+task.spawn(function()
+an.SafeCallback(aw.OnDestroyCallback)
+end)
+end
+if aw.AcrylicPaint and aw.AcrylicPaint.Model then
+aw.AcrylicPaint.Model:Destroy()
+end
+aw.Destroyed=true
+av.WindUI.ScreenGui:Destroy()
+av.WindUI.NotificationGui:Destroy()
+av.WindUI.DropdownGui:Destroy()
+av.WindUI.TooltipGui:Destroy()
+an.DisconnectAll()
+end,
+}
+
 function aw.Toggle(C)
 if aw.Closed then
 aw:Open()
@@ -14591,12 +14646,14 @@ return av.WindUI.UIScale
 end
 
 function aw.SetUIScale(C,F)
+if aw.__NeoIsland then aw.__NeoIsland:BeforeLayout("UIScale",0.25)end -- NEO ISLAND
 av.WindUI.UIScale=F
 ap(av.WindUI.UIScaleObj,0.2,{Scale=F},Enum.EasingStyle.Quint,Enum.EasingDirection.Out):Play()
 return aw
 end
 
 function aw.SetToTheCenter(C)
+if aw.__NeoIsland then aw.__NeoIsland:BeforeLayout("SetToTheCenter",0.5)end -- NEO ISLAND
 ap(
 aw.UIElements.Main,
 0.45,
@@ -14641,8 +14698,7 @@ end
 
 if aw.OpenButtonMain and aw.OpenButtonMain.Button then
 an.AddSignal(aw.OpenButtonMain.Button.TextButton.MouseButton1Click,function()
-
-
+if aw.__NeoIsland then aw.__NeoIsland:CapsulePressed()return end -- NEO ISLAND
 aw:Open()
 end)
 end
@@ -15048,6 +15104,7 @@ M.UserInputType==Enum.UserInputType.MouseMovement
 or M.UserInputType==Enum.UserInputType.Touch
 then
 if isResizing and aw.CanResize then
+if aw.__NeoIsland then aw.__NeoIsland:BeforeLayout("resize",0.12)end -- NEO ISLAND
 local N=M.Position-initialInputPosition
 local O=UDim2.new(0,initialSize.X.Offset+N.X*2,0,initialSize.Y.Offset+N.Y*2)
 
@@ -16781,6 +16838,963 @@ function aa.InstallEnhancementPack(self, Window, Config)
     return Window
 end
 
+-- ====================================================================
+-- NEO ISLAND ENGINE START
+-- ====================================================================
+--[[
+Neo Hyper — Neo Dynamic Island 1.0.0 | By MITTO
+Integrated against the supplied WindUI v1.6.65 bundle, not a replacement app.
+
+Renderer: two fixed-size CanvasGroups with independent linear alpha half-planes,
+plus a rectangular terminal clip. No clone, screenshot, free-form polygon API,
+or whole-window scale animation. CanvasGroups exist only in the owned pool;
+the live window is restored to its original parent at every settled endpoint.
+CanvasGroup documentation: https://create.roblox.com/docs/reference/engine/classes/CanvasGroup.md
+UIGradient documentation: https://create.roblox.com/docs/en-us/reference/engine/classes/UIGradient.md
+UIScale documentation: https://create.roblox.com/docs/reference/engine/classes/UIScale
+]]
+do
+-- NEO PURE START: engine-independent, executable Luau geometry/profile tests.
+local IslandProfileRegistry = {
+    { Name = "Top-Down Pinch", Description = "A narrowing wedge progresses from the upper edges toward the bottom." },
+    { Name = "Twin Edge Vacuum", Description = "The left edge leads while the right edge follows with an adjustable delay." },
+    { Name = "Vertical Zipper", Description = "An advancing seam closes the upper region before a lower zipper stage." },
+    { Name = "Corner Convergence", Description = "Upper corners fold in, pause, then the lower corners follow." },
+    { Name = "Layered Vacuum", Description = "Two contraction waves coordinate delayed header, navigation and content concealment." },
+}
+local DEFAULTS = {
+    Enabled = true, SelectedProfile = "Top-Down Pinch",
+    OpenDuration = 0.85, CloseDuration = 0.85,
+    VerticalProgression = 1.25, HorizontalCompression = 1,
+    StageOverlap = 0.35, EdgePhaseDelay = 0.10,
+    EnablePreview = true, EnableDebug = false, RecoveryEnabled = true,
+    SafeAreaPadding = 4, BoundsPadding = 2, PreviewHold = 0.18,
+    MaxCanvasSide = 1536, LayerUpdateRate = 30,
+    CalibrationX = 0, CalibrationY = 0,
+}
+local LIMITS = {
+    OpenDuration = {0.15, 3}, CloseDuration = {0.15, 3},
+    VerticalProgression = {1, 3}, HorizontalCompression = {0.5, 1.5},
+    StageOverlap = {0, 0.85}, EdgePhaseDelay = {0, 0.25},
+    SafeAreaPadding = {0, 20}, BoundsPadding = {0, 40}, PreviewHold = {0, 1},
+    MaxCanvasSide = {256, 4096}, LayerUpdateRate = {15, 60},
+    CalibrationX = {-64, 64}, CalibrationY = {-64, 64},
+}
+local ALLOWED = {
+    Closed = {Opening=true, Open=true, Recovering=true, Destroyed=true},
+    Opening = {Open=true, Closing=true, Recovering=true, Destroyed=true},
+    Open = {Closing=true, Previewing=true, Recovering=true, Destroyed=true},
+    Closing = {Closed=true, Opening=true, Recovering=true, Destroyed=true},
+    Previewing = {Open=true, Opening=true, Closing=true, Recovering=true, Destroyed=true},
+    Recovering = {Open=true, Closed=true, Destroyed=true},
+    Destroyed = {},
+}
+local function finite(n)
+    return type(n) == "number" and n == n and math.abs(n) < math.huge
+end
+local function clamp01(n) return math.clamp(n, 0, 1) end
+local function lerp(a, b, t) return a + (b-a)*t end
+local function smooth(p, first, last)
+    local t = clamp01((p-first)/math.max(0.00001, last-first))
+    return t*t*(3-2*t)
+end
+local function profileIndex(name)
+    for i, profile in ipairs(IslandProfileRegistry) do
+        if profile.Name == name or name == i then return i end
+    end
+    return nil
+end
+local function validateConfig(input)
+    local config = table.clone(DEFAULTS)
+    for name, value in pairs(input or {}) do
+        if LIMITS[name] then
+            local n = tonumber(value)
+            if finite(n) then config[name] = math.clamp(n, LIMITS[name][1], LIMITS[name][2]) end
+        elseif type(DEFAULTS[name]) == "boolean" and type(value) == "boolean" then
+            config[name] = value
+        elseif name == "SelectedProfile" and profileIndex(value) then
+            config[name] = IslandProfileRegistry[profileIndex(value)].Name
+        end
+    end
+    -- References are supplied separately; never deep-copy Instances.
+    return config
+end
+local function sampleProfile(index, progress, config)
+    assert(finite(progress), "Non-finite playback progress")
+    local p = clamp01(progress)
+    local q = p ^ config.VerticalProgression
+    local overlap, phase = config.StageOverlap, config.EdgePhaseDelay
+    local lt, lb, rt, rb, crop, pull, front
+    if index == 1 then
+        front = smooth(q, 0, 0.78)
+        lt = smooth(q, 0, 0.60)
+        lb = smooth(q, 0.30-overlap*0.12, 0.88)
+        rt, rb = lt, lb
+        crop, pull = smooth(q, 0.48-overlap*0.10, 0.94), smooth(p, 0.59, 0.94)
+    elseif index == 2 then
+        front = smooth(q, 0.05, 0.85)
+        lt, lb = smooth(q, 0, 0.56), smooth(q, 0.18, 0.82)
+        rt, rb = smooth(q, phase, 0.60+phase), smooth(q, 0.22+phase, 0.84+phase*0.4)
+        crop, pull = smooth(q, 0.44, 0.92), smooth(p, 0.64, 0.94)
+    elseif index == 3 then
+        -- Two connected half-plane stages approximate a zipper, not an arbitrary seam mask.
+        front = clamp01(q / 0.90)
+        lt = smooth(front, 0, 0.43)
+        lb = smooth(front, 0.55-overlap*0.28, 1)
+        rt, rb = lt, lb
+        crop = smooth(front, 0.28, 0.94)
+        pull = smooth(p, 0.72-overlap*0.15, 0.94)
+    elseif index == 4 then
+        front = smooth(q, 0.10, 0.90)
+        lt = 0.72*smooth(q, 0, 0.28) + 0.28*smooth(q, 0.52, 0.90)
+        lb = smooth(q, 0.43-overlap*0.12, 0.91)
+        rt, rb = lt, lb
+        crop, pull = smooth(q, 0.59, 0.94), smooth(p, 0.68, 0.94)
+    elseif index == 5 then
+        front = smooth(q, 0.10, 0.96)
+        lt = 0.4*smooth(q, 0, 0.25) + 0.6*smooth(q, 0.36, 0.86)
+        lb = 0.25*smooth(q, 0.16, 0.50) + 0.75*smooth(q, 0.61-overlap*0.12, 0.97)
+        rt, rb = lt, lb
+        crop, pull = smooth(q, 0.62, 0.96), smooth(p, 0.58, 0.94)
+    else
+        error("Unknown Island profile index: " .. tostring(index))
+    end
+    -- All trajectories enter the same measured capsule interior before final alpha concealment.
+    -- Terminal and fade windows are wide enough to stay below 20 units/timeline (tested at 1/400 steps).
+    local terminal = smooth(p, 0.80, 0.92)
+    local function edge(v) return lerp(clamp01(v*config.HorizontalCompression), 1, terminal) end
+    local result = {
+        LeftTop=edge(lt), LeftBottom=edge(lb), RightTop=edge(rt), RightBottom=edge(rb),
+        Crop=lerp(crop, 1, terminal), Pull=lerp(pull, 1, terminal),
+        Fade=smooth(p, 0.88, 1), Front=front,
+        Layers={Background=0, Header=0, Navigation=0, Content=0, Decoration=0},
+    }
+    if index == 5 then
+        result.Layers = {
+            Background=0.85*smooth(q, 0.28, 0.86),
+            Header=0.92*smooth(q, 0.12, 0.62),
+            Navigation=0.86*smooth(q, 0.25, 0.77),
+            Content=0.82*smooth(q, 0.50-overlap*0.12, 0.94),
+            Decoration=0.95*smooth(q, 0.05, 0.56),
+        }
+    end
+    return result
+end
+-- Gradient's 50% threshold is a half-plane through a measured midpoint.
+-- A square CanvasGroup avoids aspect-ratio-dependent gradient direction.
+-- Offset puts the threshold at x=(top+bottom)/2, y=height/2.
+local function halfPlane(top, bottom, height, canvasSide, right)
+    local slope = (bottom-top)/math.max(1, height)
+    local nx, ny = right and -1 or 1, right and slope or -slope
+    local rotation = math.deg(math.atan2(ny, nx))
+    return rotation, ((top+bottom)/2-canvasSide/2)/canvasSide,
+        (height/2-canvasSide/2)/canvasSide
+end
+-- Converts normalized profile samples into renderer-local boundaries and screen-space clip.
+local function computeFrame(sample, g)
+    local b, d = g.Bounds, g.Destination
+    local capLeft, capRight = (b.W-d.W)/2, (b.W+d.W)/2
+    local lt, lb = lerp(-2,capLeft,sample.LeftTop), lerp(-2,capLeft,sample.LeftBottom)
+    local rt, rb = lerp(b.W+2,capRight,sample.RightTop), lerp(b.W+2,capRight,sample.RightBottom)
+    local lr, lx, ly = halfPlane(lt,lb,b.H,g.Side,false)
+    local rr, rx, ry = halfPlane(rt,rb,b.H,g.Side,true)
+    local leftCrop = math.max(0, math.min(lt,lb))
+    local rightCrop = math.min(b.W, math.max(rt,rb))
+    local dx, dy = (d.X-capLeft-b.X)*sample.Pull, (d.Y-b.Y)*sample.Pull
+    return {
+        LeftTop=lt, LeftBottom=lb, RightTop=rt, RightBottom=rb,
+        LeftRotation=lr, LeftOffsetX=lx, LeftOffsetY=ly,
+        RightRotation=rr, RightOffsetX=rx, RightOffsetY=ry,
+        LeftCrop=leftCrop, ClipX=b.X+dx+leftCrop, ClipY=b.Y+dy,
+        ClipW=math.max(0.01,rightCrop-leftCrop), ClipH=math.max(0.01,lerp(b.H,d.H,sample.Crop)),
+    }
+end
+-- NEO PURE END
+
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local IslandGeometry, IslandRenderer, IslandAnimationController = {}, {}, {}
+IslandRenderer.__index = IslandRenderer
+IslandAnimationController.__index = IslandAnimationController
+
+-- 3. Utilities / diagnostics / narrowly isolated restoration failures.
+local function alive(object) return typeof(object) == "Instance" and object.Parent ~= nil end
+local function restoreProperty(object, name, value)
+    local ok, message = pcall(function() object[name] = value end)
+    if not ok then warn("[Neo Island/Restore] " .. tostring(object) .. "." .. name .. ": " .. tostring(message)) end
+    return ok
+end
+local function newGui(class, name, parent)
+    local object = Instance.new(class)
+    object.Name = name
+    object.BackgroundTransparency = 1
+    object.BorderSizePixel = 0
+    object.Active = false
+    object.Parent = parent
+    return object
+end
+local function effectiveVisible(object, stop)
+    local cursor = object
+    while cursor and cursor ~= stop do
+        if cursor:IsA("GuiObject") and not cursor.Visible then return false end
+        if cursor:IsA("ScreenGui") and not cursor.Enabled then return false end
+        cursor = cursor.Parent
+    end
+    return true
+end
+local GuiService = game:GetService("GuiService")
+local function layerOffset(object, reference)
+    -- AbsolutePosition is LayerCollector-relative; convert only supported ScreenGui inset modes.
+    local a, b = object:FindFirstAncestorWhichIsA("LayerCollector"), reference:FindFirstAncestorWhichIsA("LayerCollector")
+    assert(a and b, "GUI object is not inside a LayerCollector: "..object:GetFullName())
+    if a == b then return Vector2.zero end
+    assert(a:IsA("ScreenGui") and b:IsA("ScreenGui"), "Capsule must be in a ScreenGui for screen-space conversion")
+    local function inset(gui)
+        if gui.ScreenInsets == Enum.ScreenInsets.None then return Vector2.zero end
+        assert(gui.ScreenInsets == Enum.ScreenInsets.CoreUISafeInsets,
+            "Unsupported ScreenInsets "..tostring(gui.ScreenInsets).." on "..gui:GetFullName().."; place the capsule in WindUI's ScreenGui or use None/CoreUISafeInsets")
+        return (GuiService:GetGuiInset())
+    end
+    return inset(a)-inset(b)
+end
+local function rect(object, reference)
+    local pos, size = object.AbsolutePosition, object.AbsoluteSize
+    assert(finite(pos.X) and finite(pos.Y) and finite(size.X) and finite(size.Y), "Invalid rendered rectangle: "..object:GetFullName())
+    assert(size.X > 0 and size.Y > 0, "Unmeasured/zero-size GUI: "..object:GetFullName())
+    assert(math.abs(object.AbsoluteRotation) < 0.001, "Rotated window/capsule is unsupported: "..object:GetFullName())
+    local offset = reference and layerOffset(object, reference) or Vector2.zero
+    return {X=pos.X+offset.X, Y=pos.Y+offset.Y, W=size.X, H=size.Y}
+end
+local function intersect(a, b)
+    local x, y = math.max(a.X,b.X), math.max(a.Y,b.Y)
+    return {X=x,Y=y,W=math.max(0,math.min(a.X+a.W,b.X+b.W)-x),H=math.max(0,math.min(a.Y+a.H,b.Y+b.H)-y)}
+end
+local function layerFor(object, root)
+    local main = root:FindFirstChild("Main")
+    local function belongs(target) return target and (object == target or object:IsDescendantOf(target)) end
+    if main and belongs(main:FindFirstChild("Topbar")) then return "Header" end
+    if main and belongs(main:FindFirstChild("SideBarContainer")) then return "Navigation" end
+    -- UIElements provides exact references; caller replaces these root-name fallbacks below.
+    if belongs(root:FindFirstChild("Background")) or object.Name == "Blur" then return "Background" end
+    if belongs(main) then return "Content" end
+    return "Decoration"
+end
+function IslandAnimationController:Log(message, critical)
+    if critical then self.LastError = tostring(message) end
+    if critical or self.Config.EnableDebug then
+        warn("[Neo Island/"..self.State.."] "..tostring(message))
+    end
+end
+function IslandAnimationController:SetState(nextState)
+    if self.State == nextState then return false end
+    assert(ALLOWED[self.State] and ALLOWED[self.State][nextState], "Invalid state transition: "..self.State.." -> "..nextState)
+    local previous = self.State
+    self.State = nextState
+    self:Log(previous.." -> "..nextState)
+    self:UpdateStatus()
+    return true
+end
+function IslandAnimationController:Connect(signal, callback)
+    local connection = signal:Connect(callback)
+    table.insert(self.Connections, connection)
+    return connection
+end
+function IslandAnimationController:Guard(operation)
+    local ok, result = xpcall(operation, debug.traceback)
+    if not ok then self:Recover(result) end
+    return ok, result
+end
+
+-- 4. IslandGeometry: actual screen-space bounds, clipped descendants and scale.
+function IslandGeometry.Measure(controller)
+    local root, capsule = controller.Root, controller.Capsule
+    assert(alive(root), "WindUI window root was destroyed or removed")
+    assert(alive(capsule), "CapsuleReference is missing, removed or destroyed")
+    assert(not capsule:IsDescendantOf(root), "Capsule must not be inside the window being concealed")
+    assert(effectiveVisible(capsule), "Capsule is hidden by itself or an ancestor")
+    local w, c = rect(root), rect(capsule, root)
+    local bounds = table.clone(w)
+    -- Scan once per transaction; never scan the tree in RenderStepped.
+    for _, object in ipairs(root:GetDescendants()) do
+        if object:IsA("GuiObject") and effectiveVisible(object, root) and object.AbsoluteSize.X > 0 and object.AbsoluteSize.Y > 0 then
+            local r = {X=object.AbsolutePosition.X,Y=object.AbsolutePosition.Y,W=object.AbsoluteSize.X,H=object.AbsoluteSize.Y}
+            local cursor = object.Parent
+            while cursor and cursor ~= root.Parent do
+                if cursor:IsA("GuiObject") and cursor.ClipsDescendants and cursor.AbsoluteSize.X > 0 and cursor.AbsoluteSize.Y > 0 then
+                    r = intersect(r, {X=cursor.AbsolutePosition.X,Y=cursor.AbsolutePosition.Y,W=cursor.AbsoluteSize.X,H=cursor.AbsoluteSize.Y})
+                end
+                cursor = cursor.Parent
+            end
+            if r.W > 0 and r.H > 0 then
+                local x, y = math.min(bounds.X,r.X), math.min(bounds.Y,r.Y)
+                bounds = {X=x,Y=y,W=math.max(bounds.X+bounds.W,r.X+r.W)-x,H=math.max(bounds.Y+bounds.H,r.Y+r.H)-y}
+            end
+        end
+    end
+    local pad = controller.Config.BoundsPadding
+    bounds.X -= pad; bounds.Y -= pad; bounds.W += pad*2; bounds.H += pad*2
+    local origin = controller.Renderer.Origin.AbsolutePosition
+    local side = math.ceil(math.max(bounds.W,bounds.H))
+    assert(side <= controller.Config.MaxCanvasSide, "Measured CanvasGroup side "..side.." exceeds MaxCanvasSide; use a smaller window or raise the explicit limit")
+    local scale = controller.WindUI.UIScaleObj.Scale
+    assert(finite(scale) and scale > 0, "WindUI UIScale is non-positive or non-finite")
+    assert(root.AutomaticSize == Enum.AutomaticSize.None, "AutomaticSize window roots need a specific layout adapter")
+    local inset = math.min(controller.Config.SafeAreaPadding, c.W*0.2, c.H*0.2)
+    local destination = {
+        X=c.X+inset+controller.Config.CalibrationX,
+        Y=c.Y+inset+controller.Config.CalibrationY,
+        W=math.min(bounds.W,c.W-inset*2),H=math.min(bounds.H,c.H-inset*2),
+    }
+    -- Calibration cannot silently send the final reveal outside the real capsule.
+    assert(destination.X >= c.X and destination.Y >= c.Y and destination.X+destination.W <= c.X+c.W+0.01
+        and destination.Y+destination.H <= c.Y+c.H+0.01, "Calibration places the terminal clip outside the capsule")
+    return {Window=w,Capsule=c,Bounds=bounds,Origin=origin,Side=side,Scale=scale,Destination=destination}
+end
+function IslandGeometry.CapsuleSnapshot(capsule)
+    return {Position=capsule.Position,Size=capsule.Size,AnchorPoint=capsule.AnchorPoint,Rotation=capsule.Rotation,
+        AbsolutePosition=capsule.AbsolutePosition,AbsoluteSize=capsule.AbsoluteSize,
+        AutomaticSize=capsule.AutomaticSize,LayoutOrder=capsule.LayoutOrder}
+end
+function IslandGeometry.CapsuleUnchanged(capsule, snapshot)
+    if not alive(capsule) then return false, "Capsule was removed" end
+    for _, name in ipairs({"Position","Size","AnchorPoint","Rotation","AutomaticSize","LayoutOrder"}) do
+        if capsule[name] ~= snapshot[name] then return false, "Capsule property changed externally: "..name end
+    end
+    if (capsule.AbsolutePosition-snapshot.AbsolutePosition).Magnitude > 0.5 or (capsule.AbsoluteSize-snapshot.AbsoluteSize).Magnitude > 0.5 then
+        return false, "Capsule rendered rectangle changed externally (layout/title/viewport)"
+    end
+    return true
+end
+
+-- 5. IslandRenderer. Live instances are temporarily reparented, never cloned.
+function IslandRenderer.new(controller)
+    local self = setmetatable({Controller=controller,Active=false}, IslandRenderer)
+    self.Origin = newGui("Frame", "NeoIslandCoordinateOrigin", controller.WindUI.ScreenGui.Window)
+    self.Origin.Size = UDim2.fromScale(1,1)
+    -- Keep the transaction below the real capsule when both are WindUI Window-folder siblings.
+    self.Origin.ZIndex = controller.Root.ZIndex
+    local cursor = controller.Capsule
+    while cursor and cursor.Parent ~= self.Origin.Parent do cursor = cursor.Parent end
+    if cursor and cursor:IsA("GuiObject") then self.Origin.ZIndex = cursor.ZIndex - 1 end
+    self.Clip = newGui("Frame", "NeoIslandTerminalClip", self.Origin)
+    self.Clip.ClipsDescendants = true
+    self.Clip.Visible = false
+    self.Shield = newGui("Frame", "NeoIslandInputShield", self.Origin)
+    self.Shield.Active = true
+    self.Shield.ZIndex = 2
+    self.Shield.Visible = false
+    pcall(function() self.Shield.InputSink = Enum.InputSink.All end)
+    self.Left = newGui("CanvasGroup", "NeoIslandLeftMask", self.Clip)
+    self.Right = newGui("CanvasGroup", "NeoIslandRightMask", self.Left)
+    for _, group in ipairs({self.Left,self.Right}) do
+        group.GroupColor3 = Color3.new(1,1,1)
+        group.GroupTransparency = 0
+        group.Size = UDim2.fromOffset(1,1)
+    end
+    -- A constant short ramp; only Offset/Rotation change during playback.
+    local sequence = NumberSequence.new({
+        NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(0.499,1),
+        NumberSequenceKeypoint.new(0.501,0),NumberSequenceKeypoint.new(1,0),
+    })
+    self.LeftGradient, self.RightGradient = Instance.new("UIGradient"), Instance.new("UIGradient")
+    for i, gradient in ipairs({self.LeftGradient,self.RightGradient}) do
+        gradient.Name = i == 1 and "LeftBoundary" or "RightBoundary"
+        gradient.Color = ColorSequence.new(Color3.new(1,1,1))
+        gradient.Transparency = sequence
+        gradient.Parent = i == 1 and self.Left or self.Right
+    end
+    return self
+end
+function IslandRenderer:Begin()
+    local c, root = self.Controller, self.Controller.Root
+    assert(not self.Active, "Renderer transaction already exists")
+    assert(root.Parent == c.OriginalParent, "Window root parent changed; refusing to guess a new hierarchy")
+    local g = IslandGeometry.Measure(c)
+    self.Geometry = g
+    -- Native drag/resize use short tweens. Override any in-flight writer before taking the snapshot.
+    local cancel = TweenService:Create(root, TweenInfo.new(1), {Position=root.Position,Size=root.Size})
+    cancel:Play(); cancel:Cancel()
+    self.Snapshot = {Parent=root.Parent,Position=root.Position,Size=root.Size,AnchorPoint=root.AnchorPoint,
+        Visible=root.Visible,WindowPosition=c.Window.Position}
+    self.Active = true
+    self.CapsuleBefore = IslandGeometry.CapsuleSnapshot(c.Capsule)
+    self.Layers, self.Input = {}, {}
+    self.Policy = {CanResize=c.Window.CanResize,CanDropdown=c.Window.CanDropdown,Dragging=c.Window.Dragging}
+    -- Cache alpha properties once. No group wrappers are inserted into named WindUI paths.
+    local navigation, mainbar = c.Window.UIElements.SideBarContainer, c.Window.UIElements.MainBar
+    for _, object in ipairs(root:GetDescendants()) do
+        if object:IsA("GuiObject") then
+            local group = layerFor(object,root)
+            if object == navigation or object:IsDescendantOf(navigation) then group = "Navigation"
+            elseif object == mainbar or object:IsDescendantOf(mainbar) then group = "Content" end
+            local properties = {"BackgroundTransparency"}
+            if object:IsA("ImageLabel") or object:IsA("ImageButton") then table.insert(properties,"ImageTransparency") end
+            if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
+                table.insert(properties,"TextTransparency"); table.insert(properties,"TextStrokeTransparency")
+            end
+            if object:IsA("ScrollingFrame") then table.insert(properties,"ScrollBarImageTransparency") end
+            for _, name in ipairs(properties) do
+                local value = object[name]
+                if value < 1 then table.insert(self.Layers,{Object=object,Property=name,Value=value,Layer=group}) end
+            end
+            if object:IsA("GuiButton") then
+                table.insert(self.Input,{Object=object,Property="Interactable",Value=object.Interactable}); object.Interactable=false
+            elseif object:IsA("TextBox") then
+                table.insert(self.Input,{Object=object,Property="TextEditable",Value=object.TextEditable}); object.TextEditable=false
+                object:ReleaseFocus()
+            elseif object:IsA("ScrollingFrame") then
+                table.insert(self.Input,{Object=object,Property="ScrollingEnabled",Value=object.ScrollingEnabled}); object.ScrollingEnabled=false
+            end
+        elseif object:IsA("UIStroke") then
+            local value = object.Transparency
+            if value < 1 then table.insert(self.Layers,{Object=object,Property="Transparency",Value=value,Layer=layerFor(object,root)}) end
+        end
+    end
+    self.Detached = {}
+    -- Menus/tooltips are separate ScreenGuis in this source. Suppress, don't move or clip unrelated HUD.
+    for _, gui in ipairs({c.WindUI.DropdownGui,c.WindUI.TooltipGui}) do
+        table.insert(self.Detached,{Object=gui,Value=gui.Enabled})
+        gui.Enabled = false
+    end
+    self.AcrylicWas = c.Window.Acrylic
+    if self.AcrylicWas ~= nil then c.WindUI:ToggleAcrylic(false) end
+    c.Window.__NeoBridge.SetDrag(false)
+    c.Window.CanResize=false; c.Window.CanDropdown=false
+    local side = g.Side
+    self.Left.Size=UDim2.fromOffset(side,side); self.Right.Size=UDim2.fromOffset(side,side)
+    self.Right.Position=UDim2.fromOffset(0,0)
+    self.Left.GroupTransparency=0
+    root.Visible=false
+    root.Parent=self.Right
+    root.AnchorPoint=Vector2.zero
+    root.Size=UDim2.fromOffset(g.Window.W/g.Scale,g.Window.H/g.Scale)
+    root.Position=UDim2.fromOffset(g.Window.X-g.Bounds.X,g.Window.Y-g.Bounds.Y)
+    self.ExpectedPosition, self.ExpectedSize = root.Position,root.Size
+    root.Visible=true
+    self.Shield.Position=UDim2.fromOffset(g.Bounds.X-g.Origin.X,g.Bounds.Y-g.Origin.Y)
+    self.Shield.Size=UDim2.fromOffset(g.Bounds.W,g.Bounds.H)
+    self.Shield.Visible=true
+    self.LastLayerUpdate=-math.huge
+end
+function IslandRenderer:Apply(sample, forceLayers)
+    local g, c = self.Geometry, self.Controller
+    local f = computeFrame(sample, g)
+    self.LeftGradient.Rotation=f.LeftRotation; self.LeftGradient.Offset=Vector2.new(f.LeftOffsetX,f.LeftOffsetY)
+    self.RightGradient.Rotation=f.RightRotation; self.RightGradient.Offset=Vector2.new(f.RightOffsetX,f.RightOffsetY)
+    self.Clip.Position=UDim2.fromOffset(f.ClipX-g.Origin.X,f.ClipY-g.Origin.Y)
+    self.Clip.Size=UDim2.fromOffset(f.ClipW,f.ClipH)
+    self.Left.Position=UDim2.fromOffset(-f.LeftCrop,0)
+    self.Left.GroupTransparency=sample.Fade
+    self.Clip.Visible=true
+    if c.PlaybackProfile == 5 and (forceLayers or os.clock()-self.LastLayerUpdate >= 1/c.Config.LayerUpdateRate) then
+        self.LastLayerUpdate=os.clock()
+        for _, entry in ipairs(self.Layers) do
+            if alive(entry.Object) then
+                entry.Object[entry.Property]=lerp(entry.Value,1,sample.Layers[entry.Layer])
+            end
+        end
+    end
+    self.LastSample=sample
+end
+function IslandRenderer:Restore(open, restoreDetached)
+    local c, root = self.Controller,self.Controller.Root
+    self.Clip.Visible=false
+    self.Shield.Visible=false
+    if self.Snapshot and alive(root) then
+        root.Visible=false
+        -- Parent first; no frame is rendered between the writes.
+        restoreProperty(root,"Parent",self.Snapshot.Parent)
+        for _, name in ipairs({"Position","Size","AnchorPoint"}) do restoreProperty(root,name,self.Snapshot[name]) end
+        c.Window.Position=self.Snapshot.WindowPosition
+        -- Only Layered Vacuum writes alpha; skipping others avoids overwriting live theme changes.
+        if c.PlaybackProfile == 5 then
+            for _, entry in ipairs(self.Layers or {}) do
+                if alive(entry.Object) then restoreProperty(entry.Object,entry.Property,entry.Value) end
+            end
+        end
+        for _, entry in ipairs(self.Input or {}) do
+            if alive(entry.Object) then restoreProperty(entry.Object,entry.Property,entry.Value) end
+        end
+        root.Visible=open
+        c.LastWindowRestore={Position=root.Position==self.Snapshot.Position,Size=root.Size==self.Snapshot.Size,
+            AnchorPoint=root.AnchorPoint==self.Snapshot.AnchorPoint,Parent=root.Parent==self.Snapshot.Parent}
+    end
+    if self.Policy then
+        -- Open policy is derived like native Open(); a snapshot taken while Closed would be false.
+        c.Window.CanResize=open and c.Window.Resizable and not c.Window.IsFullscreen or false
+        c.Window.CanDropdown=open
+        c.Window.__NeoBridge.SetDrag(open and not c.Window.IsFullscreen)
+    end
+    for _, entry in ipairs(self.Detached or {}) do
+        if alive(entry.Object) then
+            -- Preserve enabled policy, but a real close must discard old popup visibility.
+            if not restoreDetached then
+                for _, object in ipairs(entry.Object:GetChildren()) do
+                    if object:IsA("GuiObject") then object.Visible=false end
+                end
+            end
+            entry.Object.Enabled=entry.Value
+        end
+    end
+    if self.AcrylicWas ~= nil then
+        local ok, message = pcall(function() c.WindUI:ToggleAcrylic(open and self.AcrylicWas) end)
+        if not ok then c:Log("Acrylic restore failed: "..tostring(message),true) end
+    end
+    if self.CapsuleBefore then
+        local ok, message = IslandGeometry.CapsuleUnchanged(c.Capsule,self.CapsuleBefore)
+        c.LastCapsuleCheck={Passed=ok,Detail=message or "Capsule geometry unchanged"}
+        if not ok then c:Log(message,true) end
+    end
+    self.Active=false; self.Snapshot=nil; self.Layers=nil; self.Input=nil; self.Policy=nil; self.Detached=nil
+    self.Left.GroupTransparency=0
+    -- Release CanvasGroup textures between transactions.
+    self.Left.Size=UDim2.fromOffset(1,1); self.Right.Size=UDim2.fromOffset(1,1)
+end
+function IslandRenderer:Destroy()
+    if self.Active then self:Restore(true,true) end
+    if alive(self.Origin) then self.Origin:Destroy() end
+end
+
+-- 6-8. One authoritative controller/state; a single cancellable playback clock.
+-- p=0 is open; p=1 is concealed. Reversal changes the destination, not the snapshot/profile.
+function IslandAnimationController:StopClock()
+    self.Generation += 1
+    if self.Tween then self.Tween:Cancel(); self.Tween=nil end
+    if self.FrameConnection then self.FrameConnection:Disconnect(); self.FrameConnection=nil end
+end
+function IslandAnimationController:UpdateStatus()
+    local text = self.State.." | "..self.Config.SelectedProfile
+    if self.PendingProfile then text ..= " | queued: "..self.PendingProfile end
+    if self.StatusControl then self.StatusControl:SetDesc(text) end
+    if self.ActiveControl then
+        self.ActiveControl:SetDesc(self.Config.SelectedProfile.." — "..IslandProfileRegistry[profileIndex(self.Config.SelectedProfile)].Description)
+    end
+end
+function IslandAnimationController:AdoptPending()
+    if self.PendingConfig then self.Config=self.PendingConfig; self.PendingConfig=nil end
+    if self.PendingProfile then self.Config.SelectedProfile=self.PendingProfile; self.PendingProfile=nil end
+    self:SyncControls()
+end
+function IslandAnimationController:Emit(name)
+    local callback = self.Window[name]
+    if callback then task.spawn(function() self.WindUI.Creator.SafeCallback(callback) end) end
+end
+function IslandAnimationController:BeginTransaction()
+    if self.Renderer.Active then return end
+    assert(not self.Window.Destroyed,"WindUI window is destroyed")
+    self.PlaybackConfig=table.clone(self.Config)
+    self.PlaybackProfile=profileIndex(self.Config.SelectedProfile)
+    self.Renderer:Begin()
+    self.Renderer:Apply(sampleProfile(self.PlaybackProfile,self.Clock.Value,self.PlaybackConfig),true)
+end
+function IslandAnimationController:Play(target, preview)
+    self:StopClock()
+    local generation = self.Generation
+    self.Target=target
+    self.Window.Closed=target==1 and not preview
+    if not preview and self:SetState(target==0 and "Opening" or "Closing") then
+        self:Emit(target==0 and "OnOpenCallback" or "OnCloseCallback")
+    end
+    local duration = (target==0 and self.PlaybackConfig.OpenDuration or self.PlaybackConfig.CloseDuration)
+        *math.abs(target-self.Clock.Value)
+    if duration < 0.00001 then self:Complete(target,preview); return end
+    self.Tween=TweenService:Create(self.Clock,TweenInfo.new(duration,Enum.EasingStyle.Linear),{Value=target})
+    local viewport = self.WindUI.ScreenGui.AbsoluteSize
+    local firstFrame=true
+    self.FrameConnection=RunService.RenderStepped:Connect(function()
+        if self.Generation ~= generation or self.State == "Destroyed" then return end
+        self:Guard(function()
+            assert(alive(self.Root),"Window root disappeared during playback")
+            assert(alive(self.Capsule) and effectiveVisible(self.Capsule),"Capsule unavailable during playback")
+            assert(self.Root.Parent==self.Renderer.Right,"Window reparented externally during playback")
+            assert(self.Root.Position==self.Renderer.ExpectedPosition and self.Root.Size==self.Renderer.ExpectedSize,
+                "External Position/Size writer conflicted with the transaction")
+            if self.WindUI.ScreenGui.AbsoluteSize~=viewport or math.abs(self.WindUI.UIScaleObj.Scale-self.Renderer.Geometry.Scale)>0.00001 then
+                -- Orientation/scale changes invalidate all measured rectangles; settle at the requested endpoint.
+                self:InstantTransition(preview and 0 or target,"Viewport or UIScale changed during playback")
+                return
+            end
+            local invariant, detail=IslandGeometry.CapsuleUnchanged(self.Capsule,self.Renderer.CapsuleBefore)
+            assert(invariant,detail)
+            assert(self.Root.Visible,"External visibility writer hid the real window")
+            if firstFrame then
+                firstFrame=false
+                local g=self.Renderer.Geometry
+                assert((self.Root.AbsoluteSize-Vector2.new(g.Window.W,g.Window.H)).Magnitude<1,
+                    "Root scale/constraints changed rendered dimensions after reparenting")
+                local expected=Vector2.new(g.Window.X,g.Window.Y)
+                assert((self.Root.AbsolutePosition-expected).Magnitude<1,"Root moved when entering the renderer")
+            end
+            self.Renderer:Apply(sampleProfile(self.PlaybackProfile,self.Clock.Value,self.PlaybackConfig))
+            if math.abs(self.Clock.Value-target)<0.00001 then self:Complete(target,preview) end
+        end)
+    end)
+    self.Tween:Play()
+end
+function IslandAnimationController:Complete(target, preview)
+    self:StopClock()
+    self.Clock.Value=target
+    self.Renderer:Apply(sampleProfile(self.PlaybackProfile,target,self.PlaybackConfig),true)
+    if preview and target==1 then
+        -- Keep the live transaction through the hold and reverse, avoiding an endpoint flash.
+        local generation=self.Generation
+        task.delay(self.PlaybackConfig.PreviewHold,function()
+            if self.Generation==generation and self.State=="Previewing" then
+                self:Guard(function() self:Play(0,true) end)
+            end
+        end)
+        return
+    end
+    self.Renderer:Restore(target==0,preview)
+    self.Window.Closed=target==1
+    self:SetState(target==0 and "Open" or "Closed")
+    self:AdoptPending()
+    if self.DestroyAfterClose and target==1 then self:DestroyApplication() end
+end
+function IslandAnimationController:InstantTransition(target, reason)
+    self:Log(reason,true)
+    self:StopClock()
+    local wasOpen=self.State=="Open" or self.State=="Opening" or self.State=="Previewing"
+    if self.State~="Recovering" then self:SetState("Recovering") end
+    if self.Renderer.Active then self.Renderer:Restore(target==0,target==0) end
+    if alive(self.Root) then self.Root.Visible=target==0 end
+    self.Clock.Value=target; self.Window.Closed=target==1
+    self:SetState(target==0 and "Open" or "Closed")
+    if wasOpen~=(target==0) then self:Emit(target==0 and "OnOpenCallback" or "OnCloseCallback") end
+    self:AdoptPending()
+    if self.DestroyAfterClose and target==1 then self:DestroyApplication() end
+end
+function IslandAnimationController:Request(target)
+    if self.State=="Destroyed" then return false,"Controller destroyed" end
+    if self.Window.Destroyed then return false,"WindUI window destroyed" end
+    if self.DestroyAfterClose then return false,"Application destruction already requested" end
+    if self.LayoutUntil and os.clock()<self.LayoutUntil then
+        self.LayoutTarget=target
+        self.LayoutGeneration=(self.LayoutGeneration or 0)+1
+        local token=self.LayoutGeneration
+        task.delay(self.LayoutUntil-os.clock()+0.02,function()
+            if self.State~="Destroyed" and self.LayoutGeneration==token then
+                local queued=self.LayoutTarget; self.LayoutTarget=nil
+                self:Request(queued)
+            end
+        end)
+        return true,"Queued until native layout settles"
+    end
+    if (target==0 and self.State=="Open") or (target==1 and self.State=="Closed") then return true end
+    if self.State=="Previewing" then
+        -- Reuse the live transaction: close continues from current p; open reverses the preview.
+        return self:Guard(function() self:Play(target,target==0) end)
+    end
+    if not self.Renderer.Active then
+        local ok, message=xpcall(function() self:BeginTransaction() end,debug.traceback)
+        if not ok then
+            -- Missing capsule/invalid geometry must not trap the real window in one state.
+            self:InstantTransition(target,"Animation skipped: "..tostring(message))
+            return false,message
+        end
+    end
+    return self:Guard(function() self:Play(target,false) end)
+end
+function IslandAnimationController:Open() return self:Request(0) end
+function IslandAnimationController:Close()
+    self:Request(1)
+    local selfController=self
+    -- Preserve WindUI's Close():Destroy() contract without invoking native shrink tweens.
+    return {Destroy=function() selfController:DestroyWindow() end}
+end
+function IslandAnimationController:Preview()
+    if not self.Config.EnablePreview then return false,"Preview disabled" end
+    if self.State~="Open" or (self.LayoutUntil and os.clock()<self.LayoutUntil) then return false,"Preview requires settled Open state" end
+    return self:Guard(function()
+        self.Clock.Value=0
+        self:BeginTransaction()
+        self:SetState("Previewing")
+        self:Play(1,true)
+    end)
+end
+function IslandAnimationController:CancelPreview()
+    if self.State~="Previewing" then return false end
+    self:StopClock()
+    self.Renderer:Restore(true,true)
+    self.Clock.Value=0; self.Window.Closed=false
+    self:SetState("Open"); self:AdoptPending()
+    return true
+end
+function IslandAnimationController:CapsulePressed()
+    if self.State=="Previewing" then return self:CancelPreview() end
+    if self.State=="Open" or self.State=="Opening" then return self:Request(1) end
+    return self:Request(0)
+end
+function IslandAnimationController:SetProfile(name)
+    local index=profileIndex(name)
+    if not index then return false,"Unknown profile" end
+    name=IslandProfileRegistry[index].Name
+    -- Explicit queue policy: retain captured profile for seamless reversals.
+    if self.Renderer.Active then self.PendingProfile=name
+    else self.Config.SelectedProfile=name; self:SyncControls() end
+    self:UpdateStatus()
+    return true
+end
+function IslandAnimationController:Configure(changes)
+    local base=table.clone(self.PendingConfig or self.Config)
+    for name,value in pairs(changes or {}) do base[name]=value end
+    local config=validateConfig(base)
+    if self.Renderer.Active then
+        self.PendingConfig=config
+        if changes.SelectedProfile then self:SetProfile(changes.SelectedProfile) end
+    else self.Config=config; self:SyncControls() end
+    return table.clone(config)
+end
+function IslandAnimationController:ResetDefaults()
+    if self.State=="Previewing" then self:CancelPreview() end
+    self:Configure(table.clone(DEFAULTS))
+end
+function IslandAnimationController:BeforeLayout(reason, duration)
+    if self.State=="Destroyed" then return end
+    if self.State=="Previewing" then self:CancelPreview()
+    elseif self.Renderer.Active then self:Recover("Native "..reason.." requested during transition; restored Open state",true) end
+    -- Closed root still has real geometry, so native layout can resize it while hidden.
+    self.LayoutUntil=os.clock()+duration
+end
+function IslandAnimationController:Recover(message, expected)
+    if self.State=="Destroyed" then return end
+    self:Log(message,not expected)
+    self:StopClock()
+    self:SetState("Recovering")
+    if alive(self.Root) then
+        -- Visible recovery is mandatory for Open/Opening/Previewing; Closed may stay closed if disabled.
+        local canOpen=self.Config.RecoveryEnabled or expected or self.Target~=1
+        self.Renderer:Restore(canOpen,true)
+        self.Root.Visible=canOpen
+        self.Window.Closed=not canOpen; self.Clock.Value=canOpen and 0 or 1
+        self:SetState(canOpen and "Open" or "Closed")
+        self:AdoptPending()
+        if self.DestroyAfterClose then self:DestroyApplication() end
+    else
+        self:Detach(false)
+    end
+end
+function IslandAnimationController:GetDiagnostics()
+    return {State=self.State,Profile=self.Config.SelectedProfile,PendingProfile=self.PendingProfile,
+        Progress=self.Clock.Value,HasFrameConnection=self.FrameConnection~=nil,
+        ActiveTransaction=self.Renderer.Active,LastError=self.LastError,
+        CapsuleInvariant=self.LastCapsuleCheck,WindowRestoration=self.LastWindowRestore,
+        LastBoundarySample=self.Renderer.LastSample,Config=table.clone(self.Config)}
+end
+function IslandAnimationController:DestroyWindow()
+    if self.State=="Destroyed" or self.DestroyAfterClose then return end
+    if self.State=="Previewing" then self:CancelPreview() end
+    -- Destruction outranks native-layout queueing; a queued request would be rejected later.
+    self.LayoutTarget=nil; self.LayoutUntil=nil; self.LayoutGeneration=(self.LayoutGeneration or 0)+1
+    if self.State=="Closed" then self:DestroyApplication(); return end
+    local ok=self:Request(1)
+    self.DestroyAfterClose=true
+    if not ok or self.State=="Closed" then self:DestroyApplication() end
+end
+function IslandAnimationController:DestroyApplication()
+    if self.State=="Destroyed" then return end
+    local bridge=self.Window.__NeoBridge
+    self:Detach(false)
+    bridge.DestroyApplication()
+end
+-- IslandCleanup: idempotent; remove only owned resources, never destroy the live UI.
+function IslandAnimationController:Detach(showWindow)
+    if self.State=="Destroyed" then return end
+    self:StopClock()
+    self.LayoutGeneration=(self.LayoutGeneration or 0)+1
+    for _, connection in ipairs(self.Connections) do connection:Disconnect() end
+    table.clear(self.Connections)
+    if self.Renderer.Active then self.Renderer:Restore(showWindow~=false,true) end
+    self.Renderer:Destroy()
+    self.Clock:Destroy()
+    self:SetState("Destroyed")
+    self.Window.__NeoIsland=nil; self.Window.NeoIsland=nil
+    if alive(self.Root) and showWindow~=false then
+        self.Window.Closed=false; self.Root.Visible=true
+        self.Window.__NeoBridge.SetDrag(not self.Window.IsFullscreen)
+        self.Window.CanResize=self.Window.Resizable and not self.Window.IsFullscreen
+        self.Window.CanDropdown=true
+    end
+    if self.Window.OpenButtonMain then
+        self.Window.OpenButtonMain.DragController:Set(self.OriginalCapsuleDraggable)
+        self.Window.OpenButtonMain:Visible(self.Window.Closed and not self.Window.IsPC and self.Window.IsOpenButtonEnabled)
+    end
+    -- The native tab is retained: WindUI exposes no verified tab-removal API in this source.
+    for _, control in ipairs(self.SettingsControls or {}) do
+        if control.Lock then control:Lock("Neo Island disabled; initialize a fresh controller to re-enable") end
+    end
+end
+function IslandAnimationController:Destroy() self:Detach(true) end
+
+-- 9. IslandSettingsUI: verified Tab/Section/Dropdown/Slider/Toggle/Button/Paragraph APIs.
+function IslandAnimationController:SyncControls()
+    if self.SyncingControls or not self.Settings then return end
+    self.SyncingControls=true
+    local settings, config=self.Settings,self.Config
+    settings.Profile:Select(config.SelectedProfile)
+    for name, control in pairs(settings.Sliders) do control:Set(config[name]) end
+    settings.Debug:Set(config.EnableDebug,false)
+    self.SyncingControls=false
+    self:UpdateStatus()
+end
+local function buildSettings(controller)
+    local window=controller.Window
+    -- Reuse the tab after a Detach/reinstall, avoiding duplicate tabs/controllers.
+    local owner=window.__NeoSettingsOwner
+    if owner then
+        owner.Controller=controller
+        controller.Settings=owner.Settings; controller.SettingsControls=owner.Controls
+        controller.StatusControl=owner.Status; controller.ActiveControl=owner.Active
+        for _, control in ipairs(owner.Controls) do if control.Unlock then control:Unlock() end end
+        controller:SyncControls()
+        return
+    end
+    owner={Controller=controller,Controls={}}
+    window.__NeoSettingsOwner=owner
+    local tab=window:Tab({Title="Island Motion",Icon="sparkles"})
+    tab:Section({Title="Neo Dynamic Island",Desc="By MITTO · The capsule stays fixed. Tap it or press Escape to cancel preview."})
+    local status=tab:Paragraph({Title="Motion status",Desc="Open"})
+    local active=tab:Paragraph({Title="Active profile",Desc=controller.Config.SelectedProfile})
+    owner.Status,owner.Active=status,active
+    controller.StatusControl,controller.ActiveControl=status,active
+    local function add(control) table.insert(owner.Controls,control); return control end
+    tab:Paragraph({Title="Switching policy",Desc="Changes made during a transition are queued and applied when the window reaches Open or Closed; the running motion never jumps."})
+    local names={}
+    for _, profile in ipairs(IslandProfileRegistry) do
+        table.insert(names,profile.Name)
+        tab:Paragraph({Title=profile.Name,Desc=profile.Description})
+    end
+    local settings={Sliders={}}
+    settings.Profile=add(tab:Dropdown({Title="Animation profile",Values=names,Value=controller.Config.SelectedProfile,
+        Callback=function(value)
+            local c=owner.Controller
+            if c.State~="Destroyed" and not c.SyncingControls then c:SetProfile(value) end
+        end}))
+    local sliders={
+        {"OpenDuration","Open duration (seconds)",0.15,3,0.05},
+        {"CloseDuration","Close duration (seconds)",0.15,3,0.05},
+        {"VerticalProgression","Top-first progression",1,3,0.05},
+        {"HorizontalCompression","Edge intensity",0.5,1.5,0.05},
+        {"StageOverlap","Stage overlap",0,0.85,0.05},
+        {"EdgePhaseDelay","Twin-edge phase delay",0,0.25,0.01},
+    }
+    for _, data in ipairs(sliders) do
+        local name=data[1]
+        settings.Sliders[name]=add(tab:Slider({Title=data[2],Step=data[5],
+            Value={Min=data[3],Max=data[4],Default=controller.Config[name]},
+            Callback=function(value)
+                local c=owner.Controller
+                if c.State~="Destroyed" and not c.SyncingControls then c:Configure({[name]=value}) end
+            end}))
+    end
+    add(tab:Button({Title="Preview selected motion",Desc="Uses this window; the capsule remains a reachable cancel target.",Icon="play",
+        Callback=function() local c=owner.Controller; if c.State~="Destroyed" then c:Preview() end end}))
+    add(tab:Button({Title="Cancel preview",Desc="Also tap the fixed capsule or press Escape.",Icon="square",
+        Callback=function() local c=owner.Controller; if c.State~="Destroyed" then c:CancelPreview() end end}))
+    add(tab:Button({Title="Reset motion defaults",Icon="rotate-ccw",
+        Callback=function() local c=owner.Controller; if c.State~="Destroyed" then c:ResetDefaults() end end}))
+    settings.Debug=add(tab:Toggle({Title="Diagnostic logging",Value=controller.Config.EnableDebug,
+        Callback=function(value) local c=owner.Controller; if c.State~="Destroyed" and not c.SyncingControls then c:Configure({EnableDebug=value}) end end}))
+    add(tab:Button({Title="Print diagnostics",Icon="activity",Callback=function()
+        local c=owner.Controller
+        if c.State~="Destroyed" then
+            local d=c:GetDiagnostics()
+            print("[Neo Island]",d.State,d.Profile,"p=",d.Progress,"active=",d.ActiveTransaction,"frame=",d.HasFrameConnection)
+            if d.CapsuleInvariant then print("[Neo Island/Capsule]",d.CapsuleInvariant.Passed,d.CapsuleInvariant.Detail) end
+            if d.WindowRestoration then print("[Neo Island/Restore]",d.WindowRestoration.Position,d.WindowRestoration.Size,d.WindowRestoration.AnchorPoint,d.WindowRestoration.Parent) end
+            if d.LastError then warn("[Neo Island/Last error]",d.LastError) end
+        end
+    end}))
+    owner.Settings=settings; owner.Tab=tab
+    controller.Settings=settings; controller.SettingsControls=owner.Controls
+    controller:SyncControls()
+end
+
+-- 10-13. Integration/initialization: source-level lifecycle guards, no guessed button hooks.
+function aa.InstallNeoIsland(self, window, options)
+    options=options or {}
+    if window.__NeoIsland and window.__NeoIsland.State~="Destroyed" then return window.__NeoIsland end
+    local config=validateConfig(options)
+    if not config.Enabled then return nil end
+    local root=window.UIElements.Main
+    assert(root and root:IsA("Frame") and window.__NeoBridge, "This installation requires the supplied WindUI window bridge")
+    assert(self.ScreenGui.ZIndexBehavior==Enum.ZIndexBehavior.Sibling,"CanvasGroup requires Sibling ZIndexBehavior")
+    local nativeCapsule=window.OpenButtonMain and window.OpenButtonMain.Button
+    local capsule=options.CapsuleReference or nativeCapsule
+    assert(capsule and capsule:IsA("GuiObject"),"CapsuleReference must be a real GuiObject")
+    assert(alive(capsule),"CapsuleReference is not parented")
+    -- Start from a canonical real-window visual state without running any legacy tween.
+    window.__NeoBridge.PrepareOpen()
+    local controller
+    local installed,installError=xpcall(function()
+    controller=setmetatable({Window=window,WindUI=self,Root=root,Capsule=capsule,
+        Config=config,State="Open",Connections={},OriginalParent=root.Parent,Generation=0,
+        OriginalCapsuleDraggable=window.OpenButtonMain and window.OpenButtonMain.DragController.CanDraggable or false,
+    },IslandAnimationController)
+    controller.Clock=Instance.new("NumberValue"); controller.Clock.Name="NeoIslandPlayback"; controller.Clock.Value=0
+    controller.Renderer=IslandRenderer.new(controller)
+    -- Only visibility/input policy changes. Position/Size/AnchorPoint/layout are never written.
+    if nativeCapsule then
+        window.OpenButtonMain.DragController:Set(false)
+        window.OpenButtonMain:Visible(capsule==nativeCapsule)
+    end
+    window.__NeoIsland=controller; window.NeoIsland=controller
+    controller:Connect(UserInputService.InputBegan,function(input)
+        if input.KeyCode==Enum.KeyCode.Escape and controller.State=="Previewing" then controller:CancelPreview() end
+    end)
+    if capsule~=nativeCapsule and capsule:IsA("GuiButton") then
+        controller:Connect(capsule.Activated,function() controller:CapsulePressed() end)
+    end
+    controller:Connect(root.Destroying,function()
+        if controller.State~="Destroyed" then controller:Detach(false) end
+    end)
+    controller:Connect(self.ScreenGui.Destroying,function()
+        if controller.State~="Destroyed" then controller:Detach(false) end
+    end)
+    controller:Connect(capsule.Destroying,function()
+        if controller.State~="Destroyed" then controller:Recover("CapsuleReference destroyed; animation restored safely") end
+    end)
+    controller.LayoutUntil=os.clock()+0.3 -- Native AutoScale UIScale tween is 0.2s.
+    function controller:BuildSettings()
+        if self.State=="Destroyed" then return end
+        local ok,message=xpcall(function() buildSettings(self) end,debug.traceback)
+        if not ok then self:Log("Island Motion settings initialization failed: "..message,true) end
+    end
+    if options.SettingsTab~=false then
+        if window.__NeoSettingsOwner or next(window.TabModule.Tabs)~=nil then
+            task.defer(function() controller:BuildSettings() end)
+        elseif not window.__NeoOriginalTab then
+            -- Native tabs do not auto-select. Defer after the caller's first tab so Island Motion appears after it.
+            window.__NeoOriginalTab=window.Tab
+            window.Tab=function(selfWindow,tabConfig)
+                local tab=window.__NeoOriginalTab(selfWindow,tabConfig)
+                local c=window.__NeoIsland
+                if c and not window.__NeoSettingsOwner and not c.SettingsScheduled then
+                    c.SettingsScheduled=true
+                    task.defer(function() c:BuildSettings() end)
+                end
+                return tab
+            end
+        end
+    end
+    controller:UpdateStatus()
+    end,debug.traceback)
+    if not installed then
+        if controller and controller.State~="Destroyed" then controller:Detach(true) end
+        error("Neo Island installation failed and was rolled back: "..tostring(installError),0)
+    end
+    return controller
+end
+-- 14. Development helpers; no runtime pass claims are generated by installation.
+aa.NeoIslandMath={Defaults=table.clone(DEFAULTS),Profiles=IslandProfileRegistry,
+    ValidateConfig=validateConfig,SampleProfile=sampleProfile,HalfPlane=halfPlane,ComputeFrame=computeFrame,AllowedTransitions=ALLOWED}
+end
+
+-- ====================================================================
+-- NEO ISLAND ENGINE END
+-- ====================================================================
+
 function aa.CreateWindow(az,aA)
 local aB=a.load'ae'
 
@@ -16903,6 +17917,14 @@ aa.Window=h
 
 if aA.Acrylic then
 au.init()
+end
+
+-- NEO ISLAND: single initialization point. Pass NeoIsland=false to keep native WindUI motion.
+if aA.NeoIsland~=false and aa.InstallNeoIsland then
+local ok,err=pcall(aa.InstallNeoIsland,aa,h,type(aA.NeoIsland)=="table"and aA.NeoIsland or{})
+if not ok then
+warn("[Neo Island] Native WindUI motion kept: "..tostring(err))
+end
 end
 
 

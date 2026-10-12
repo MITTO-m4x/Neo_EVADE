@@ -3,10 +3,10 @@
     By MITTO
     Place at: EVADE/scr/music/NeoMusic.lua
 
-    IMPORTANT:
-    Roblox cannot play an arbitrary GitHub MP3 URL as SoundId. Add each song's
-    Roblox-approved audio asset id to Catalog below. L.lua timing data is mirrored
-    in each catalog entry (GitHub raw folders cannot be enumerated from a client).
+    GitHub BGM auto-discovery enabled. Scans repository tree, finds song folders,
+    detects L.lua / Cover images / audio files, and reads L.lua metadata/lyrics.
+    A GitHub audio file still is not a Roblox SoundId; audio playback requires a
+    valid Roblox-approved asset ID (optionally stored as SoundId in L.lua metadata).
 ]=]
 local NeoMusic = {}
 NeoMusic.__index = NeoMusic
@@ -27,6 +27,90 @@ local Catalog = {
     --   Lyrics = {{Time=0.02, Text="First line"}, {Time=3.13, Text="Second line"}},
     -- },
 }
+
+-- Automatic BGM discovery. No hard-coded song-folder names required.
+local DEFAULT_API = "https://api.github.com/repos/MITTO-m4x/Neo_EVADE/git/trees/main?recursive=1"
+local DEFAULT_RAW = "https://raw.githubusercontent.com/MITTO-m4x/Neo_EVADE/refs/heads/main/"
+local DEFAULT_ROOT = "EVADE/scr/music/BGM/"
+
+local function encodePath(path)
+    return (path:gsub("([^%w%-%._~/])", function(ch)
+        return string.format("%%%02X", string.byte(ch))
+    end))
+end
+
+local function decodeLyricsPayload(source)
+    if type(source) ~= "string" or source == "" then return nil end
+    local compiler = loadstring or load
+    if type(compiler) ~= "function" then return nil end
+    local fn = compiler(source)
+    if type(fn) ~= "function" then return nil end
+    local ok, value = pcall(fn)
+    if not ok or type(value) ~= "table" then return nil end
+    return value
+end
+
+local function scanRepository(options, notify)
+    local api = options.GitHubApi or DEFAULT_API
+    local rawBase = options.RawBase or DEFAULT_RAW
+    local rootPath = options.BGMRoot or DEFAULT_ROOT
+    local ok, response = pcall(function() return game:HttpGet(api) end)
+    if not ok then error("GitHub tree request failed: " .. tostring(response)) end
+    local decoded = HttpService:JSONDecode(response)
+    if type(decoded) ~= "table" or type(decoded.tree) ~= "table" then
+        error("GitHub returned no repository tree")
+    end
+    local found = {}
+    for _, item in ipairs(decoded.tree) do
+        local path = item.path
+        if item.type == "blob" and type(path) == "string" and path:sub(1, #rootPath) == rootPath then
+            local relative = path:sub(#rootPath + 1)
+            local folder, child = relative:match("^([^/]+)/(.+)$")
+            if folder and child then
+                local song = found[folder] or {Title=folder, Artist="Unknown artist", Files={}, Folder=folder}
+                found[folder] = song
+                song.Files[#song.Files + 1] = child
+                local lower = child:lower()
+                if lower == "l.lua" then song.LyricsURL = rawBase .. encodePath(path) end
+                if lower == "cover.png" or lower == "cover.jpg" or lower == "cover.jpeg" or lower == "cover.webp" then
+                    song.Cover = rawBase .. encodePath(path)
+                end
+                if lower:match("%.mp3$") or lower:match("%.ogg$") or lower:match("%.wav$") then
+                    song.AudioURL = rawBase .. encodePath(path)
+                end
+            end
+        end
+    end
+    local catalog = {}
+    for folder, song in pairs(found) do
+        if song.LyricsURL then
+            local lyricOk, lyricSource = pcall(function() return game:HttpGet(song.LyricsURL) end)
+            if lyricOk then
+                local data = decodeLyricsPayload(lyricSource)
+                if data then
+                    song.Title = tostring(data.Title or data.title or folder)
+                    song.Artist = tostring(data.Artist or data.artist or song.Artist)
+                    song.SoundId = tostring(data.SoundId or data.SoundID or data.soundId or "")
+                    local lyrics = data.Lyrics or data.lyrics or data.Lines or data.lines
+                    if type(lyrics) == "string" then
+                        song.Lyrics = lyrics
+                    elseif type(lyrics) == "table" then
+                        song.Lyrics = lyrics
+                    elseif #data > 0 then
+                        song.Lyrics = data
+                    end
+                else
+                    -- A non-executable L.lua is still discovered, but cannot be parsed as metadata.
+                    song.Lyrics = {}
+                end
+            else
+                song.Lyrics = {}
+            end
+            catalog[folder] = song
+        end
+    end
+    return catalog
+end
 
 local C = {
     bg = Color3.fromRGB(7,7,9), panel = Color3.fromRGB(15,15,18), panel2 = Color3.fromRGB(24,24,28),
@@ -60,7 +144,7 @@ function NeoMusic.Start(options)
     options=options or {}
     if NeoMusic._instance and NeoMusic._instance.Destroy then pcall(function() NeoMusic._instance:Destroy() end) end
     local self=setmetatable({},NeoMusic); NeoMusic._instance=self
-    self.catalog=options.Catalog or Catalog; self.selected=nil; self.playing=false; self.connections={}; self.lyricScale=1
+    self.catalog=options.Catalog or Catalog; self.selected=nil; self.scanOptions=options; self.playing=false; self.connections={}; self.lyricScale=1
     local player=Players.LocalPlayer
     if not player then return self end
     local gui=create("ScreenGui",{Name="NeoMusicPremium",ResetOnSpawn=false,IgnoreGuiInset=true,ZIndexBehavior=Enum.ZIndexBehavior.Sibling},player:WaitForChild("PlayerGui"))
@@ -70,7 +154,8 @@ function NeoMusic.Start(options)
     create("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,20,0,0),Size=UDim2.new(0,220,1,0),Text="NEO HYPER  /  MUSIC",TextColor3=C.white,TextSize=17,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Left},top)
     local close=button(top,"×",UDim2.new(0,38,0,34),UDim2.new(1,-50,0,12)); close.TextSize=22
     close.MouseButton1Click:Connect(function() gui.Enabled=false end)
-    local search=create("TextBox",{PlaceholderText="Search your music library...",Text="",ClearTextOnFocus=false,Position=UDim2.new(0,18,0,72),Size=UDim2.new(0,300,0,38),BackgroundColor3=C.panel,TextColor3=C.white,PlaceholderColor3=C.muted,TextSize=14,Font=Enum.Font.Gotham,BorderSizePixel=0},root); round(search,9); stroke(search)
+    local search=create("TextBox",{PlaceholderText="Search your music library...",Text="",ClearTextOnFocus=false,Position=UDim2.new(0,18,0,72),Size=UDim2.new(0,218,0,38),BackgroundColor3=C.panel,TextColor3=C.white,PlaceholderColor3=C.muted,TextSize=14,Font=Enum.Font.Gotham,BorderSizePixel=0},root); round(search,9); stroke(search)
+    local scanButton=button(root,"Scan BGM",UDim2.new(0,82,0,38),UDim2.new(0,244,0,72)); scanButton.TextSize=12
     local results=create("ScrollingFrame",{Position=UDim2.new(0,18,0,120),Size=UDim2.new(0,300,1,-140),BackgroundColor3=C.panel,BorderSizePixel=0,ScrollBarThickness=3,CanvasSize=UDim2.new()},root); round(results,10)
     create("UIListLayout",{Padding=UDim.new(0,6),SortOrder=Enum.SortOrder.LayoutOrder},results); create("UIPadding",{PaddingTop=UDim.new(0,8),PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8)},results)
     local title=create("TextLabel",{BackgroundTransparency=1,Position=UDim2.new(0,338,0,78),Size=UDim2.new(1,-360,0,32),Text="Choose a song",TextColor3=C.white,TextSize=22,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Left},root)
@@ -121,7 +206,7 @@ function NeoMusic.Start(options)
         drawLyrics()
     end
     local function refresh(query)
-        for _,child in ipairs(results:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
+        for _,child in ipairs(results:GetChildren()) do if child:IsA("TextButton") or child.Name=="EmptyState" then child:Destroy() end end
         local count=0; query=string.lower(query or "")
         for key,song in pairs(self.catalog) do
             local label=string.lower(tostring(song.Title or key).." "..tostring(song.Artist or ""))
@@ -131,9 +216,25 @@ function NeoMusic.Start(options)
                 row.MouseButton1Click:Connect(function() selectSong(key,song) end)
             end
         end
-        if count==0 then local empty=create("TextLabel",{BackgroundTransparency=1,Size=UDim2.new(1,-10,0,65),Text="No songs indexed yet.\nAdd entries to Catalog.",TextColor3=C.muted,TextSize=13,Font=Enum.Font.Gotham,TextWrapped=true},results) end
+        if count==0 then local empty=create("TextLabel",{Name="EmptyState",BackgroundTransparency=1,Size=UDim2.new(1,-10,0,65),Text="No songs found.\nPress Scan BGM to discover GitHub folders.",TextColor3=C.muted,TextSize=13,Font=Enum.Font.Gotham,TextWrapped=true},results) end
         task.defer(function() local l=results:FindFirstChildOfClass("UIListLayout"); if l then results.CanvasSize=UDim2.new(0,0,0,l.AbsoluteContentSize.Y+16) end end)
     end
+    local scanning=false
+    scanButton.MouseButton1Click:Connect(function()
+        if scanning then return end
+        scanning=true; scanButton.Text="Scanning..."
+        task.spawn(function()
+            local ok, discovered=pcall(function() return scanRepository(self.scanOptions, options.Notify) end)
+            if ok then
+                for key,song in pairs(discovered) do self.catalog[key]=song end
+                if options.Notify then pcall(options.Notify,"BGM scan complete: "..tostring((function() local n=0 for _ in pairs(discovered) do n+=1 end return n end)()).." song folders found") end
+            else
+                warn("[NeoMusic] BGM scan failed: "..tostring(discovered))
+                if options.Notify then pcall(options.Notify,"BGM scan failed: "..tostring(discovered)) end
+            end
+            scanning=false; scanButton.Text="Scan BGM"; refresh(search.Text)
+        end)
+    end)
     search:GetPropertyChangedSignal("Text"):Connect(function() refresh(search.Text) end)
     play.MouseButton1Click:Connect(function()
         if not self.selected then return end

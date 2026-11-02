@@ -1,141 +1,17 @@
--- NeoFloat external module (shared by Gen2 / Premium)
--- Load via: loadstring(game:HttpGet("https://raw.githubusercontent.com/MITTO-m4x/Neo_EVADE/main/EVADE/scr/ui/NeoFloat.lua"))()
--- Requires: Players, LocalPlayer as LP, CoreGui, RunService, UserInputService, TweenService already available or uses game services.
-
+-- ============================================================================
+-- NeoFloat.lua  |  Neo Hyper floating buttons (external module)
+-- Upload this file to GitHub and point NEO_FLOAT_URL (in the main script) at its RAW link.
+-- The main script downloads it the first time a floating button is created, not before.
+-- ============================================================================
+if getgenv().NeoFloatReady then return end
 local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
-local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local CoreGui = select(2, pcall(game.GetService, game, "CoreGui")) or game:GetService("CoreGui")
+local Window = getgenv().Window or _G.Window
+local FloatingButtonLocks = getgenv().NeoFloatingButtonLocks or {}
+local IsFloatingLocked = getgenv().NeoIsFloatingLocked or function() return false end
 
-if type(getgenv) ~= "function" then
-    getgenv = function() return _G end
-end
-
--- Tap helper if missing
-if not getgenv().NeoTapOK then
-    getgenv().NeoTapOK = function(container, input, pressT, lastT)
-        local now = os.clock()
-        local dur = now - pressT
-        if dur > 0.45 or dur < 0.02 then return false end
-        if now - lastT < 0.5 then return false end
-        local ok = true
-        pcall(function()
-            local p = input.Position
-            local a, sz = container.AbsolutePosition, container.AbsoluteSize
-            local inset = game:GetService("GuiService"):GetGuiInset()
-            local inX = p.X >= a.X - 30 and p.X <= a.X + sz.X + 30
-            local inY = (p.Y >= a.Y - 30 and p.Y <= a.Y + sz.Y + 30)
-                or (p.Y + inset.Y >= a.Y - 30 and p.Y + inset.Y <= a.Y + sz.Y + 30)
-            ok = inX and inY
-        end)
-        return ok
-    end
-end
-
-
--- ===== STYLE =====
-    -- NEO FLOAT STYLE: one shared look for every floating button.
-    -- Follows the active theme and is controlled from Settings > Floating Buttons.
-    -- ========================================================================
-    do
-        local G = getgenv()
-        local S = G.NeoFloatStyle or {}
-        G.NeoFloatStyle = S
-        if S.follow == nil then S.follow = true end
-        S.transparency = S.transparency or 0.1
-        S.corner = S.corner or 0.2
-        S.textSize = S.textSize or 14
-        S.stroke = S.stroke or 2
-        S.scale = S.scale or 1
-        S.accent = S.accent or Color3.fromRGB(255, 255, 255)
-        S.bg = S.bg or Color3.fromRGB(0, 0, 0)
-        S.text = S.text or Color3.fromRGB(255, 255, 255)
-        local reg = {}
-        local function col(kind, on)
-            if not S.follow then
-                if kind == "bg" then return on and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(12, 12, 12) end
-                if kind == "stroke" then return on and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(180, 180, 180) end
-                return Color3.fromRGB(255, 255, 255)
-            end
-            local a, b, t = S.accent, S.bg, S.text
-            if kind == "bg" then
-                return on and b:Lerp(a, 0.22) or b:Lerp(Color3.new(0, 0, 0), 0.25)
-            elseif kind == "stroke" then
-                return on and a or a:Lerp(b, 0.55)
-            end
-            return t
-        end
-        G.NeoFC = col
-        NeoFC = col
-        local function applyOne(e)
-            local c = e.container
-            if not (c and c.Parent) then return false end
-            local on = false
-            pcall(function() on = (e.getOn and e.getOn()) and true or false end)
-            c.BackgroundColor3 = col("bg", on)
-            c.BackgroundTransparency = S.transparency
-            if e.stroke then
-                e.stroke.Color = col("stroke", on)
-                e.stroke.Thickness = S.stroke
-            end
-            if e.label then
-                e.label.TextColor3 = col("text", on)
-                e.label.TextSize = S.textSize
-            end
-            local uc = c:FindFirstChildOfClass("UICorner")
-            if uc then uc.CornerRadius = UDim.new(S.corner, 0) end
-            local us = c:FindFirstChildOfClass("UIScale")
-            if not us then
-                us = Instance.new("UIScale")
-                us.Parent = c
-            end
-            us.Scale = S.scale
-            return true
-        end
-        G.NeoFloatRegister = function(container, stroke, label, getOn)
-            local e = { container = container, stroke = stroke, label = label, getOn = getOn }
-            reg[#reg + 1] = e
-            applyOne(e)
-        end
-        G.NeoFloatRestyle = function()
-            for i = #reg, 1, -1 do
-                if not applyOne(reg[i]) then table.remove(reg, i) end
-            end
-
--- ===== CORE =====
-    getgenv().NeoFloatingButtonLocks = getgenv().NeoFloatingButtonLocks or {}
-    getgenv().NeoFloatRegistry = getgenv().NeoFloatRegistry or {}
-    local FloatingButtonLocks = getgenv().NeoFloatingButtonLocks
-    local function SetFloatingButtonLock(guiName, locked)
-        FloatingButtonLocks[guiName] = locked == true
-        getgenv().NeoFloatingButtonLocks = FloatingButtonLocks
-    end
-    -- Unified lock check: works with both logical keys and obfuscated ScreenGui names
-    local function IsFloatingLocked(guiOrName)
-        if type(guiOrName) == "string" then
-            return FloatingButtonLocks[guiOrName] == true
-        end
-        if typeof(guiOrName) == "Instance" then
-            local logical = guiOrName:GetAttribute("NeoLogicalKey")
-            if logical and FloatingButtonLocks[logical] == true then return true end
-            -- also try common aliases
-            if logical then
-                local aliases = {
-                    Fly = "FlyFloatingButton",
-                    Carry = "CarryFloatingButton",
-                    Revive = "ReviveFloatingButton",
-                    AutoCrouch = "AutoCrouchFloating",
-                }
-                local alias = aliases[logical]
-                if alias and FloatingButtonLocks[alias] == true then return true end
-            end
-            if FloatingButtonLocks[guiOrName.Name] == true then return true end
-        end
-        return false
-    end
-    getgenv().NeoIsFloatingLocked = IsFloatingLocked
     local function NeoObfName(n)
         n = n or (12 + math.random(0, 10))
         local alphabet = "0123456789abcdefABCDEF"
@@ -437,17 +313,5 @@ end
             end
         end)
     end
-    local function AddFloatingLockToggle(section, title, flag, guiName)
-        section:Toggle({
-            Title = title or " Lock Floating Button",
-            Flag = flag,
-            Value = FloatingButtonLocks[guiName] == true,
-            Callback = function(state)
-                SetFloatingButtonLock(guiName, state)
-            end
-        })
-    end
-    getgenv().NeoSetFloatingButtonLock = SetFloatingButtonLock
-    getgenv().NeoAddFloatingLockToggle = AddFloatingLockToggle
 
-return getgenv().NeoFloat
+getgenv().NeoFloatReady = true
